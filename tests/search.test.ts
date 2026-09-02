@@ -13,7 +13,7 @@ beforeAll(async () => {
       ('Texas', ARRAY['tx', 'texas us']::text[], 'region',
         ST_SetSRID(ST_MakePoint(-99.9018, 31.9686), 4326)::geography,
         ST_MakeEnvelope(-106.646, 25.837, -93.508, 36.501, 4326))
-    ON CONFLICT ((lower(name))) DO UPDATE SET
+    ON CONFLICT ((lower(name)), kind) DO UPDATE SET
       aliases = EXCLUDED.aliases,
       kind = EXCLUDED.kind,
       geom = EXCLUDED.geom,
@@ -256,5 +256,127 @@ describe('searchAssets', () => {
     if (isSearchError(out)) return
     expect(out.place?.name).toMatch(/texas/i)
     expect(out.place?.kind).toBe('region')
+  })
+
+  it('resolves Georgia the US region separately from Georgia the country', async () => {
+    try {
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES
+          ('Georgia', ARRAY['sakartvelo']::text[], 'country',
+            ST_SetSRID(ST_MakePoint(43.3569, 42.3154), 4326)::geography,
+            ST_MakeEnvelope(40.0, 41.0, 46.7, 43.6, 4326)),
+          ('Georgia', ARRAY['ga', 'georgia us']::text[], 'region',
+            ST_SetSRID(ST_MakePoint(-83.5000, 32.6500), 4326)::geography,
+            ST_MakeEnvelope(-85.6, 30.3, -80.8, 35.0, 4326))
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          aliases = EXCLUDED.aliases,
+          kind = EXCLUDED.kind,
+          geom = EXCLUDED.geom,
+          bbox = EXCLUDED.bbox
+      `
+      await sql`
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, geom, tags) VALUES (
+          'node',
+          9290010001,
+          'Test Georgia Airport',
+          'airport',
+          ST_SetSRID(ST_MakePoint(-83.4, 32.1), 4326),
+          '{}'::jsonb
+        )
+        ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+          name = EXCLUDED.name,
+          canonical_type = EXCLUDED.canonical_type,
+          geom = EXCLUDED.geom,
+          tags = EXCLUDED.tags
+      `
+      const region = await searchAssets('airports in georgia')
+      expect(isSearchError(region)).toBe(false)
+      if (isSearchError(region)) return
+      expect(region.place?.kind).toBe('region')
+      expect(region.place?.name).toMatch(/georgia/i)
+      expect(region.results.some((a) => a.osmId === 9290010001)).toBe(true)
+
+      const country = await searchAssets('type:airport country:georgia')
+      expect(isSearchError(country)).toBe(false)
+      if (isSearchError(country)) return
+      expect(country.place?.kind).toBe('country')
+      expect(country.place?.name).toMatch(/georgia/i)
+    } finally {
+      await sql`DELETE FROM assets WHERE osm_id = 9290010001`
+      await sql`DELETE FROM places WHERE lower(name) = 'georgia'`
+    }
+  })
+
+  it('intersects in-search against the real country shape, not a dateline envelope', async () => {
+    try {
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'Aleutia',
+          ARRAY['aleutia test']::text[],
+          'country',
+          ST_SetSRID(ST_MakePoint(170.0, 50.0), 4326)::geography,
+          ST_Multi(ST_Union(
+            ST_MakeEnvelope(169.5, 49.5, 171.0, 51.0, 4326),
+            ST_MakeEnvelope(-166.0, 49.5, -164.0, 51.0, 4326)
+          ))
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          aliases = EXCLUDED.aliases,
+          kind = EXCLUDED.kind,
+          geom = EXCLUDED.geom,
+          bbox = EXCLUDED.bbox
+      `
+      await sql`
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, geom, tags) VALUES (
+          'node',
+          9290010002,
+          'Test Aleutia Airport',
+          'airport',
+          ST_SetSRID(ST_MakePoint(170.2, 50.1), 4326),
+          '{}'::jsonb
+        )
+        ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+          name = EXCLUDED.name,
+          canonical_type = EXCLUDED.canonical_type,
+          geom = EXCLUDED.geom,
+          tags = EXCLUDED.tags
+      `
+      const out = await searchAssets('airports in aleutia')
+      expect(isSearchError(out)).toBe(false)
+      if (isSearchError(out)) return
+      expect(out.place?.name).toMatch(/aleutia/i)
+      expect(out.results.some((a) => a.osmId === 9290010002)).toBe(true)
+    } finally {
+      await sql`DELETE FROM assets WHERE osm_id = 9290010002`
+      await sql`DELETE FROM places WHERE lower(name) = 'aleutia'`
+    }
+  })
+
+  it('does not store a near-world envelope for a dateline-crossing way', async () => {
+    try {
+      await sql`
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, geom, tags) VALUES (
+          'way',
+          9290010003,
+          'Dateline Test Way',
+          'pipeline',
+          ST_SetSRID(ST_GeomFromText('LINESTRING(179 0, -179 0)'), 4326),
+          '{}'::jsonb
+        )
+        ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+          name = EXCLUDED.name,
+          canonical_type = EXCLUDED.canonical_type,
+          geom = EXCLUDED.geom,
+          tags = EXCLUDED.tags
+      `
+      const [row] = await sql<{ span: number }[]>`
+        SELECT ST_XMax(bbox) - ST_XMin(bbox) AS span
+        FROM assets
+        WHERE osm_id = 9290010003
+      `
+      expect(Number(row.span)).toBeLessThan(1)
+    } finally {
+      await sql`DELETE FROM assets WHERE osm_id = 9290010003`
+    }
   })
 })
