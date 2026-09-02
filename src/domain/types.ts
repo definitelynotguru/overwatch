@@ -12,6 +12,11 @@ export type ParsedQuery = {
   raw: string
 }
 
+export type AssetGeometry = {
+  type: string
+  coordinates: unknown
+}
+
 export type Asset = {
   id: string
   osmType: string
@@ -21,6 +26,7 @@ export type Asset = {
   operator: string | null
   lat: number
   lon: number
+  geometry: AssetGeometry | null
   tags: Record<string, string>
 }
 

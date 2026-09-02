@@ -4,7 +4,7 @@ Search physical infrastructure the way you would say it out loud.
 
 `airports near london` · `bridges in new york` · `telecom towers in karnataka`
 
-Overwatch is a geospatial search app. You type a place and an asset type. PostGIS answers with points. MapLibre draws them on a dark OpenFreeMap vector basemap. There is no Overpass round trip, no Nominatim in the search path, and no Leaflet.
+Overwatch is a geospatial search app. You type a place and an asset type. PostGIS answers with the stored geometry (point, line, or polygon). MapLibre draws those shapes on a dark OpenFreeMap vector basemap and clusters centroids at low zoom. There is no Overpass round trip, no Nominatim in the search path, and no Leaflet.
 
 ![Airports near London](docs/screenshots/airports-london.png)
 
@@ -20,7 +20,7 @@ Counts came from `curl` against a running local app. `near` uses a 50 km radius 
 
 ## What you get
 
-A natural-language parser and a structured `key:value` parser that both land on the same query object. SQL then runs against `geography(Point, 4326)` with a GIST index. The UI is a dark three-column layout: facets, result cards, map.
+A natural-language parser and a structured `key:value` parser that both land on the same query object. SQL then runs meter ST_DWithin / ST_Intersects against mixed `geometry(Geometry, 4326)` with GIST indexes. The UI is a dark three-column layout: facets, result cards, map.
 
 The URL is the query. `/?q=airports%20near%20london` is a shareable search. Enter submits. Escape clears.
 
@@ -41,7 +41,7 @@ flowchart LR
   PostGIS --> MapLibre
 ```
 
-You type `q`. The parser emits a query object. Overwatch resolves the place from the `places` table, then PostGIS filters `assets` with `ST_DWithin` (`near`) or `ST_Intersects` (`in` / `region` / `country`). The API returns GeoJSON plus facets. MapLibre clusters the points.
+You type `q`. The parser emits a query object. Overwatch resolves the place from the `places` table, then PostGIS filters `assets` with `ST_DWithin` on `geom::geography` (`near`) or `ST_Intersects` on the real geom (`in` / `region` / `country`). The API returns GeoJSON of the stored geometry plus facets. MapLibre draws points, lines, and polygons, and clusters on the generated centroid.
 
 `near` uses the place point and your radius in meters. `in` uses the place bbox. The old prototype hit public Overpass and timed out. This classifies assets at ingest and queries local PostGIS.
 
@@ -51,6 +51,7 @@ You need Node 22.12+ and Docker Compose.
 
 ```bash
 docker compose up -d postgres
+npm run db:migrate
 npm run db:seed
 cp .env.example .env
 npm install
@@ -60,7 +61,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). Postgres listens on `127.0.0.1:5432`. User, password, and database are all `overwatch`.
 
-`docker compose` applies `db/schema.sql` on first start. `npm run db:seed` loads the demo places and assets.
+`docker compose` applies `db/schema.sql` on first start. `npm run db:seed` loads demo places and mixed-geometry assets.
 
 Production:
 
@@ -97,9 +98,9 @@ operator:"Long Island Rail Road" region:"new york"
 | `near` | Place name plus radius search |
 | `radius` | Kilometers, 1-500. Default 50. Used only with `near` |
 
-You need a type or an operator, and you need a place. Missing either returns `invalid_query`. A place the seed does not know returns `unknown_place`.
+You need a type or an operator, and you need a place. Missing either returns `invalid_query`. A place missing from the places table returns `unknown_place`.
 
-Seeded places: London, New York, Karnataka, Mumbai, France, California, Germany, India. Aliases such as `nyc` and `bombay` resolve too.
+Demo places: London, New York, Karnataka, Mumbai, France, California, Germany, India, Berlin, and Texas. Aliases such as nyc and bombay resolve too. scripts/load-gazetteer.sh loads Natural Earth countries, admin-1, and populated places.
 
 ## HTTP API
 
@@ -183,7 +184,9 @@ Two tables, both in EPSG 4326.
 | `name` | text |
 | `canonical_type` | text, btree |
 | `operator` | text, btree |
-| `geom` | `geography(Point, 4326)`, GIST |
+| `geom` | `geometry(Geometry, 4326)`, source of truth, GIST |
+| `centroid` | generated `geography(Point, 4326)` for pins / clusters |
+| `bbox` | generated `geometry(Polygon, 4326)` for index / display |
 | `tags` | jsonb |
 
 Type ids, aliases, and OSM matchers live in [`src/domain/catalog.ts`](src/domain/catalog.ts). Ingest classifies a feature once. Search never re-reads raw OSM tags.
@@ -196,11 +199,11 @@ The seed is a demo. For a Geofabrik `.osm.pbf` you already downloaded:
 ./scripts/import-pbf.sh /path/to/region-latest.osm.pbf
 ```
 
-That needs [osmium-tool](https://osmcode.org/osmium-tool/). It filters aeroway, man_made, power, industrial, port, and data-centre tags, exports points, and upserts through `scripts/load-geojson.py`. The loader skips non-finite coordinates and anything outside WGS84 bounds. Do not fetch the planet in CI.
+That needs [osmium-tool](https://osmcode.org/osmium-tool/). It filters aeroway, man_made, power, industrial, port, and data-centre tags, exports points, linestrings, and polygons (no centroid-on-import) through `scripts/load-geojson.py`. The loader skips non-finite coordinates and anything outside WGS84 bounds. Do not fetch the planet in CI.
 
 ## Tests
 
-Vitest runs parser unit tests and PostGIS search tests against the seed. Parser coverage includes natural language, structured tokens, quoted values, radius clamps, and operator word boundaries. Search tests check the three demo queries, `unknown_place`, `invalid_query`, operator LIKE escaping, and the 500-row cap.
+Vitest runs parser unit tests and PostGIS search tests against the seed. Parser coverage includes natural language, structured tokens, quoted values, radius clamps, and operator word boundaries. Search tests check the three demo queries, non-point geometries, Berlin and Texas fixtures, `unknown_place`, `invalid_query`, operator LIKE escaping, and the 500-row cap.
 
 ## Keyboard
 

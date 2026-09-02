@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import type { Asset } from '../domain/types'
+import type { Feature, FeatureCollection, Geometry, Point } from 'geojson'
+import type { Asset, AssetGeometry } from '../domain/types'
 
 const OPENFREEMAP_STYLE = 'https://tiles.openfreemap.org/styles/dark'
 const FALLBACK_STYLE = 'https://demotiles.maplibre.org/style.json'
@@ -15,16 +16,57 @@ type Props = {
   onClusterChange: (cluster: boolean) => void
 }
 
-function toGeoJSON(assets: Asset[]): GeoJSON.FeatureCollection {
+function centroidPoint(a: Asset): Point {
+  return { type: 'Point', coordinates: [a.lon, a.lat] }
+}
+
+function asGeometry(a: Asset): Geometry {
+  const g = a.geometry
+  if (g && typeof g.type === 'string' && g.coordinates != null) {
+    return g as Geometry
+  }
+  return centroidPoint(a)
+}
+
+function toCentroidGeoJSON(assets: Asset[]): FeatureCollection {
   return {
     type: 'FeatureCollection',
     features: assets.map((a) => ({
       type: 'Feature',
       id: a.id,
       properties: { id: a.id, name: a.name, type: a.type },
-      geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
+      geometry: centroidPoint(a),
     })),
   }
+}
+
+function toShapeGeoJSON(assets: Asset[]): FeatureCollection {
+  const features: Feature[] = []
+  for (const a of assets) {
+    const geometry = asGeometry(a)
+    if (geometry.type === 'Point' || geometry.type === 'MultiPoint') continue
+    features.push({
+      type: 'Feature',
+      id: a.id,
+      properties: { id: a.id, name: a.name, type: a.type },
+      geometry,
+    })
+  }
+  return { type: 'FeatureCollection', features }
+}
+
+function walkCoords(coords: unknown, visit: (lon: number, lat: number) => void) {
+  if (!Array.isArray(coords) || coords.length === 0) return
+  if (typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+    visit(coords[0], coords[1])
+    return
+  }
+  for (const c of coords) walkCoords(c, visit)
+}
+
+function extendGeometry(bounds: maplibregl.LngLatBounds, geom: AssetGeometry | Geometry | null, lat: number, lon: number) {
+  bounds.extend([lon, lat])
+  if (geom && 'coordinates' in geom) walkCoords(geom.coordinates, (x, y) => bounds.extend([x, y]))
 }
 
 function addLayers(map: maplibregl.Map, cluster: boolean) {
@@ -36,6 +78,30 @@ function addLayers(map: maplibregl.Map, cluster: boolean) {
     cluster,
     clusterMaxZoom: 14,
     clusterRadius: 50,
+  })
+  map.addSource('hits-shapes', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  })
+
+  map.addLayer({
+    id: 'hit-fills',
+    type: 'fill',
+    source: 'hits-shapes',
+    filter: ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+    paint: {
+      'fill-color': '#3b82f6',
+      'fill-opacity': 0.28,
+    },
+  })
+  map.addLayer({
+    id: 'hit-lines',
+    type: 'line',
+    source: 'hits-shapes',
+    paint: {
+      'line-color': '#60a5fa',
+      'line-width': 3,
+    },
   })
 
   map.addLayer({
@@ -91,17 +157,20 @@ function addLayers(map: maplibregl.Map, cluster: boolean) {
 }
 
 function dropHitLayers(map: maplibregl.Map) {
-  for (const id of ['cluster-count', 'clusters', 'points']) {
+  for (const id of ['cluster-count', 'clusters', 'points', 'hit-lines', 'hit-fills']) {
     if (map.getLayer(id)) map.removeLayer(id)
   }
   if (map.getSource('hits')) map.removeSource('hits')
+  if (map.getSource('hits-shapes')) map.removeSource('hits-shapes')
 }
 
 function applyHits(map: maplibregl.Map, assets: Asset[], cluster: boolean) {
   if (!map.isStyleLoaded()) return
   if (!map.getSource('hits')) addLayers(map, cluster)
   const src = map.getSource('hits') as maplibregl.GeoJSONSource | undefined
-  src?.setData(toGeoJSON(assets))
+  src?.setData(toCentroidGeoJSON(assets))
+  const shapes = map.getSource('hits-shapes') as maplibregl.GeoJSONSource | undefined
+  shapes?.setData(toShapeGeoJSON(assets))
 }
 
 export function MapPane({
@@ -171,30 +240,29 @@ export function MapPane({
     map.on('click', 'clusters', (e) => {
       const feature = e.features?.[0]
       const id = feature?.properties?.cluster_id
-      const coords = (feature?.geometry as GeoJSON.Point | undefined)?.coordinates
+      const coords = (feature?.geometry as Point | undefined)?.coordinates
       if (id == null || !coords) return
       const source = map.getSource('hits') as maplibregl.GeoJSONSource
-      source.getClusterExpansionZoom(id, (err, zoom) => {
-        if (err || zoom == null) return
+      void source.getClusterExpansionZoom(id).then((zoom) => {
+        if (zoom == null) return
         map.easeTo({ center: coords as [number, number], zoom })
       })
     })
-    map.on('click', 'points', (e) => {
+    const pick = (e: maplibregl.MapLayerMouseEvent) => {
       const id = e.features?.[0]?.properties?.id
       if (typeof id === 'string') onSelectRef.current(id)
-    })
-    map.on('mouseenter', 'clusters', () => {
-      map.getCanvas().style.cursor = 'pointer'
-    })
-    map.on('mouseleave', 'clusters', () => {
-      map.getCanvas().style.cursor = ''
-    })
-    map.on('mouseenter', 'points', () => {
-      map.getCanvas().style.cursor = 'pointer'
-    })
-    map.on('mouseleave', 'points', () => {
-      map.getCanvas().style.cursor = ''
-    })
+    }
+    map.on('click', 'points', pick)
+    map.on('click', 'hit-lines', pick)
+    map.on('click', 'hit-fills', pick)
+    for (const layer of ['clusters', 'points', 'hit-lines', 'hit-fills']) {
+      map.on('mouseenter', layer, () => {
+        map.getCanvas().style.cursor = 'pointer'
+      })
+      map.on('mouseleave', layer, () => {
+        map.getCanvas().style.cursor = ''
+      })
+    }
     mapRef.current = map
 
     return () => {
@@ -218,7 +286,7 @@ export function MapPane({
     applyHits(map, assets, clusterRef.current)
     if (assets.length === 0) return
     const bounds = new maplibregl.LngLatBounds()
-    for (const a of assets) bounds.extend([a.lon, a.lat])
+    for (const a of assets) extendGeometry(bounds, a.geometry, a.lat, a.lon)
     map.fitBounds(bounds, { padding: 48, maxZoom: 11, duration: 600 })
   }, [assets])
 
@@ -242,6 +310,22 @@ export function MapPane({
       '#fbbf24',
       '#3b82f6',
     ])
+    if (map.getLayer('hit-lines')) {
+      map.setPaintProperty('hit-lines', 'line-color', [
+        'case',
+        ['==', ['get', 'id'], selectedId ?? ''],
+        '#fbbf24',
+        '#60a5fa',
+      ])
+    }
+    if (map.getLayer('hit-fills')) {
+      map.setPaintProperty('hit-fills', 'fill-color', [
+        'case',
+        ['==', ['get', 'id'], selectedId ?? ''],
+        '#fbbf24',
+        '#3b82f6',
+      ])
+    }
   }, [selectedId])
 
   return (

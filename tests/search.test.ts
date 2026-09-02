@@ -1,7 +1,25 @@
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { searchAssets } from '../src/db/search'
 import { sql } from '../src/db/client'
 import { isSearchError } from '../src/domain/types'
+
+
+beforeAll(async () => {
+  await sql`
+    INSERT INTO places (name, aliases, kind, geom, bbox) VALUES
+      ('Berlin', ARRAY['berlin de', 'berlin germany']::text[], 'city',
+        ST_SetSRID(ST_MakePoint(13.4050, 52.5200), 4326)::geography,
+        ST_MakeEnvelope(13.088, 52.338, 13.761, 52.675, 4326)),
+      ('Texas', ARRAY['tx', 'texas us']::text[], 'region',
+        ST_SetSRID(ST_MakePoint(-99.9018, 31.9686), 4326)::geography,
+        ST_MakeEnvelope(-106.646, 25.837, -93.508, 36.501, 4326))
+    ON CONFLICT ((lower(name))) DO UPDATE SET
+      aliases = EXCLUDED.aliases,
+      kind = EXCLUDED.kind,
+      geom = EXCLUDED.geom,
+      bbox = EXCLUDED.bbox
+  `
+})
 
 afterAll(async () => {
   await sql.end({ timeout: 2 })
@@ -146,5 +164,97 @@ describe('searchAssets', () => {
     expect(region.stats.total).toBeGreaterThanOrEqual(0)
     expect(tight.stats.total).toBeGreaterThanOrEqual(0)
     expect(tight.stats.total).toBeLessThanOrEqual(region.stats.total)
+  })
+
+  it('returns real linestring geometry for the seeded Thames pipeline', async () => {
+    const out = await searchAssets('pipelines near london')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    const pipe = out.results.find((a) => a.name?.includes('Thames'))
+    expect(pipe).toBeTruthy()
+    expect(pipe!.geometry?.type).toBe('LineString')
+    expect(pipe!.geometry?.type).not.toBe('Point')
+    const coords = pipe!.geometry?.coordinates as number[][]
+    expect(Array.isArray(coords)).toBe(true)
+    expect(coords.length).toBeGreaterThan(1)
+    expect(coords[0]?.length).toBeGreaterThanOrEqual(2)
+    const [centroid] = await sql<{ lat: number; lon: number }[]>`
+      SELECT ST_Y(centroid::geometry) AS lat, ST_X(centroid::geometry) AS lon
+      FROM assets
+      WHERE osm_id = 9100000001
+    `
+    expect(Number(pipe!.lat)).toBe(Number(centroid.lat))
+    expect(Number(pipe!.lon)).toBe(Number(centroid.lon))
+    expect(out.bounds).toBeTruthy()
+    expect(out.bounds![0]).toBeLessThanOrEqual(-0.14)
+    expect(out.bounds![1]).toBeLessThanOrEqual(51.501)
+    expect(out.bounds![2]).toBeGreaterThanOrEqual(-0.08)
+    expect(out.bounds![3]).toBeGreaterThanOrEqual(51.508)
+  })
+
+  it('returns real polygon geometry for the seeded industrial estate', async () => {
+    const out = await searchAssets('type:industrial near:london')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    const poly = out.results.find((a) => a.name?.includes('Isle of Dogs'))
+    expect(poly).toBeTruthy()
+    expect(poly!.geometry?.type).toBe('Polygon')
+    const [centroid] = await sql<{ lat: number; lon: number }[]>`
+      SELECT ST_Y(centroid::geometry) AS lat, ST_X(centroid::geometry) AS lon
+      FROM assets
+      WHERE osm_id = 9100000002
+    `
+    expect(Number(poly!.lat)).toBe(Number(centroid.lat))
+    expect(Number(poly!.lon)).toBe(Number(centroid.lon))
+    expect(out.bounds).toBeTruthy()
+    expect(out.bounds![0]).toBeLessThanOrEqual(-0.02)
+    expect(out.bounds![1]).toBeLessThanOrEqual(51.5)
+    expect(out.bounds![2]).toBeGreaterThanOrEqual(-0.01)
+    expect(out.bounds![3]).toBeGreaterThanOrEqual(51.505)
+  })
+
+  it('includes a pipeline that intersects Texas even when the centroid is outside', async () => {
+    try {
+      await sql`
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, geom, tags) VALUES (
+          'way',
+          9199990001,
+          'West Texas Spur',
+          'pipeline',
+          ST_SetSRID(ST_GeomFromText('LINESTRING(-120 32, -106.5 32)'), 4326),
+          '{"man_made":"pipeline"}'::jsonb
+        )
+        ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+          name = EXCLUDED.name,
+          canonical_type = EXCLUDED.canonical_type,
+          geom = EXCLUDED.geom,
+          tags = EXCLUDED.tags
+      `
+      const out = await searchAssets('pipelines in texas')
+      expect(isSearchError(out)).toBe(false)
+      if (isSearchError(out)) return
+      const spur = out.results.find((a) => a.name === 'West Texas Spur')
+      expect(spur).toBeTruthy()
+      expect(spur!.geometry?.type).toBe('LineString')
+      expect(spur!.lon).toBeLessThan(-106.646)
+    } finally {
+      await sql`DELETE FROM assets WHERE osm_id = 9199990001`
+    }
+  })
+
+  it('resolves fixture place Berlin instead of unknown_place', async () => {
+    const out = await searchAssets('airports near berlin')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    expect(out.place?.name).toMatch(/berlin/i)
+    expect(out.place?.kind).toBe('city')
+  })
+
+  it('resolves fixture place Texas instead of unknown_place', async () => {
+    const out = await searchAssets('airports in texas')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    expect(out.place?.name).toMatch(/texas/i)
+    expect(out.place?.kind).toBe('region')
   })
 })

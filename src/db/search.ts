@@ -1,6 +1,6 @@
 import { sql } from './client'
 import { parseQuery, validateQuery } from '../domain/parser'
-import type { Asset, SearchError, SearchResult } from '../domain/types'
+import type { Asset, AssetGeometry, SearchError, SearchResult } from '../domain/types'
 
 const RESULT_CAP = 500
 
@@ -21,6 +21,11 @@ type AssetRow = {
   operator: string | null
   lat: number
   lon: number
+  geojson: string | null
+  xmin: number
+  ymin: number
+  xmax: number
+  ymax: number
   tags: Record<string, unknown>
 }
 
@@ -33,7 +38,21 @@ function asTags(tags: Record<string, unknown>): Record<string, string> {
   return out
 }
 
+function parseGeometry(raw: string | null, lat: number, lon: number): AssetGeometry {
+  if (raw) {
+    try {
+      const g = JSON.parse(raw) as AssetGeometry
+      if (g && typeof g.type === 'string') return g
+    } catch {
+      // fall through to centroid point
+    }
+  }
+  return { type: 'Point', coordinates: [lon, lat] }
+}
+
 function toAsset(row: AssetRow): Asset {
+  const lat = Number(row.lat)
+  const lon = Number(row.lon)
   return {
     id: `${row.osm_type}/${row.osm_id}`,
     osmType: row.osm_type,
@@ -41,8 +60,9 @@ function toAsset(row: AssetRow): Asset {
     name: row.name,
     type: row.canonical_type,
     operator: row.operator,
-    lat: Number(row.lat),
-    lon: Number(row.lon),
+    lat,
+    lon,
+    geometry: parseGeometry(row.geojson, lat, lon),
     tags: asTags(row.tags),
   }
 }
@@ -94,7 +114,7 @@ export async function searchAssets(q: string): Promise<SearchResult | SearchErro
   const place = placeName ? await resolvePlace(placeName, preferKind) : null
   if (!place) {
     return {
-      error: `Unknown place "${placeName ?? ''}". Seeded places include London, New York, Karnataka, Mumbai, France, California, Germany, India.`,
+      error: `Unknown place "${placeName ?? ''}". Load the Natural Earth gazetteer or seed demo places.`,
       code: 'unknown_place',
       query,
     }
@@ -112,8 +132,8 @@ export async function searchAssets(q: string): Promise<SearchResult | SearchErro
     ? sql`AND a.operator ILIKE ${likePattern} ESCAPE '\\'`
     : sql``
   const geoFilter = useNear
-    ? sql`AND ST_DWithin(a.geom, (SELECT geom FROM places WHERE id = ${place.id}), ${radiusM})`
-    : sql`AND ST_Intersects(a.geom::geometry, (SELECT bbox FROM places WHERE id = ${place.id}))`
+    ? sql`AND ST_DWithin(a.geom::geography, (SELECT geom FROM places WHERE id = ${place.id}), ${radiusM})`
+    : sql`AND ST_Intersects(a.geom, (SELECT bbox FROM places WHERE id = ${place.id}))`
 
   const [countRows, typeRows, operatorRows, rows] = await Promise.all([
     sql<[{ n: number }]>`
@@ -153,8 +173,19 @@ export async function searchAssets(q: string): Promise<SearchResult | SearchErro
         a.name,
         a.canonical_type,
         a.operator,
-        ST_Y(a.geom::geometry) AS lat,
-        ST_X(a.geom::geometry) AS lon,
+        ST_Y(a.centroid::geometry) AS lat,
+        ST_X(a.centroid::geometry) AS lon,
+        ST_AsGeoJSON(
+          CASE
+            WHEN GeometryType(a.geom) IN ('POINT', 'MULTIPOINT') THEN a.geom
+            WHEN ST_NPoints(a.geom) > 400 THEN COALESCE(ST_SimplifyPreserveTopology(a.geom, 0.0003), a.geom)
+            ELSE a.geom
+          END
+        ) AS geojson,
+        ST_XMin(a.bbox) AS xmin,
+        ST_YMin(a.bbox) AS ymin,
+        ST_XMax(a.bbox) AS xmax,
+        ST_YMax(a.bbox) AS ymax,
         a.tags
       FROM assets a
       WHERE 1=1
@@ -179,10 +210,10 @@ export async function searchAssets(q: string): Promise<SearchResult | SearchErro
     let maxLon = -Infinity
     let maxLat = -Infinity
     for (const row of rows) {
-      minLon = Math.min(minLon, Number(row.lon))
-      minLat = Math.min(minLat, Number(row.lat))
-      maxLon = Math.max(maxLon, Number(row.lon))
-      maxLat = Math.max(maxLat, Number(row.lat))
+      minLon = Math.min(minLon, Number(row.xmin), Number(row.lon))
+      minLat = Math.min(minLat, Number(row.ymin), Number(row.lat))
+      maxLon = Math.max(maxLon, Number(row.xmax), Number(row.lon))
+      maxLat = Math.max(maxLat, Number(row.ymax), Number(row.lat))
     }
     bounds = [minLon, minLat, maxLon, maxLat]
   }
