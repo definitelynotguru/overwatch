@@ -124,11 +124,6 @@ export function MapPane({
   useEffect(() => {
     if (!host.current || mapRef.current) return
     const container = host.current
-    container.style.position = 'absolute'
-    container.style.inset = '0'
-    container.style.width = '100%'
-    container.style.height = '100%'
-    container.style.minHeight = '100%'
     let fellBack = false
     const map = new maplibregl.Map({
       container,

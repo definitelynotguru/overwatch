@@ -46,6 +46,20 @@ describe('parseQuery — structured', () => {
     expect(q.region).toBeNull()
   })
 
+  it('parses type:airport near:london radius:5', () => {
+    const q = parseQuery('type:airport near:london radius:5')
+    expect(q.type).toBe('airport')
+    expect(q.near).toBe('london')
+    expect(q.radius).toBe(5)
+  })
+
+  it('parses type:airport country:france', () => {
+    const q = parseQuery('type:airport country:france')
+    expect(q.type).toBe('airport')
+    expect(q.country).toBe('france')
+    expect(validateQuery(q).valid).toBe(true)
+  })
+
   it('resolves type:datacenter to data_center', () => {
     const q = parseQuery('type:datacenter region:california')
     expect(q.type).toBe('data_center')
@@ -112,6 +126,20 @@ describe('parseQuery — radius', () => {
   it('parses kilometers as the radius unit', () => {
     expect(parseQuery('airports near london within 20 kilometers').radius).toBe(20)
     expect(parseQuery('airports near london within 15 kilometres').radius).toBe(15)
+  })
+
+  it('parses airports near london radius:5', () => {
+    const q = parseQuery('airports near london radius:5')
+    expect(q.type).toBe('airport')
+    expect(q.near).toBe('london')
+    expect(q.radius).toBe(5)
+  })
+
+  it('prefers structured radius over NL within', () => {
+    const q = parseQuery('airports near london within 20 km radius:5')
+    expect(q.type).toBe('airport')
+    expect(q.near).toBe('london')
+    expect(q.radius).toBe(5)
   })
 })
 

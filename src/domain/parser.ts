@@ -37,6 +37,7 @@ export function parseQuery(input: string): ParsedQuery {
   if (!raw) return result
 
   let rest = raw
+  let structuredRadius = false
   for (const match of raw.matchAll(KEY_VALUE)) {
     const key = match[1]!.toLowerCase()
     const val = (match[2] ?? match[3] ?? '').replace(/_/g, ' ')
@@ -47,7 +48,10 @@ export function parseQuery(input: string): ParsedQuery {
     else if (key === 'near') result.near = val
     else if (key === 'radius') {
       const n = parseInt(val, 10)
-      if (Number.isFinite(n)) result.radius = Math.min(Math.max(n, 1), 500)
+      if (Number.isFinite(n)) {
+        result.radius = Math.min(Math.max(n, 1), 500)
+        structuredRadius = true
+      }
     }
     rest = rest.replace(match[0]!, ' ')
   }
@@ -70,12 +74,11 @@ export function parseQuery(input: string): ParsedQuery {
   }
 
   const radiusHit = rest.match(RADIUS) ?? raw.match(RADIUS)
-  if (radiusHit && !/:radius/i.test(raw.split(radiusHit[0])[0] ?? '')) {
-    // structured radius: already applied; NL "within 20 km" still applies
-  }
   if (radiusHit) {
-    const n = parseInt(radiusHit[1]!, 10)
-    if (Number.isFinite(n)) result.radius = Math.min(Math.max(n, 1), 500)
+    if (!structuredRadius) {
+      const n = parseInt(radiusHit[1]!, 10)
+      if (Number.isFinite(n)) result.radius = Math.min(Math.max(n, 1), 500)
+    }
     rest = rest.replace(radiusHit[0], ' ')
   }
 
