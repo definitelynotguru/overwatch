@@ -4,11 +4,13 @@ import { useQuery } from '@tanstack/react-query'
 import { SearchHeader } from '../components/SearchHeader'
 import { FacetPanel } from '../components/FacetPanel'
 import { ResultList } from '../components/ResultList'
-import { isSearchError, type Asset, type SearchError, type SearchResult } from '../domain/types'
+import { isSearchError, type Asset, type RelatedAssets, type SearchError, type SearchResult } from '../domain/types'
 
 const MapPane = lazy(() => import('../components/MapPane').then((m) => ({ default: m.MapPane })))
 
 type Search = { q: string }
+
+const EMPTY_RELATED: RelatedAssets[] = []
 
 export const Route = createFileRoute('/')({
   validateSearch: (s: Record<string, unknown>): Search => ({
@@ -61,6 +63,12 @@ function Home() {
       return true
     })
   }, [result, typeFilter, operatorFilter])
+
+  const related = result?.related ?? EMPTY_RELATED
+  const legend =
+    related.length > 0
+      ? [result?.query.type, ...related.map((r) => r.type)].filter((v): v is string => Boolean(v))
+      : []
 
   function runSearch(next: string) {
     void navigate({ search: { q: next }, replace: true })
@@ -139,6 +147,8 @@ function Home() {
           <Suspense fallback={<div className="map-pane" />}>
           <MapPane
             assets={assets}
+            related={related}
+            legend={legend}
             cluster={cluster}
             selectedId={selectedId}
             flyTo={flyTo}

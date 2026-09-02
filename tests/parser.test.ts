@@ -159,3 +159,34 @@ describe('parseQuery — operator word boundaries', () => {
     expect(parseQuery('operator:airtel region:karnataka').operator).toBe('airtel')
   })
 })
+
+describe('parseQuery — join hops', () => {
+  it('parses pipelines within 20 km of airports near london', () => {
+    const q = parseQuery('pipelines within 20 km of airports near london')
+    expect(q.type).toBe('pipeline')
+    expect(q.hops).toEqual([{ type: 'airport', withinM: 20000 }])
+    expect(q.near).toBe('london')
+    expect(q.radius).toBe(50)
+  })
+
+  it('parses data centers within 10 km of substations within 50 km of airports near london', () => {
+    const q = parseQuery(
+      'data centers within 10 km of substations within 50 km of airports near london',
+    )
+    expect(q.type).toBe('data_center')
+    expect(q.hops).toEqual([
+      { type: 'substation', withinM: 10000 },
+      { type: 'airport', withinM: 50000 },
+    ])
+    expect(q.near).toBe('london')
+    expect(q.radius).toBe(50)
+  })
+
+  it('keeps within 20 km as place radius when there is no of <type>', () => {
+    const q = parseQuery('airports near london within 20 km')
+    expect(q.type).toBe('airport')
+    expect(q.near).toBe('london')
+    expect(q.radius).toBe(20)
+    expect(q.hops).toEqual([])
+  })
+})

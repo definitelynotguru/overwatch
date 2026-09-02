@@ -2,6 +2,11 @@ import type { AssetType } from './catalog'
 
 export type { AssetType }
 
+export type JoinHop = {
+  type: string
+  withinM: number
+}
+
 export type ParsedQuery = {
   type: string | null
   operator: string | null
@@ -9,6 +14,7 @@ export type ParsedQuery = {
   country: string | null
   near: string | null
   radius: number
+  hops: JoinHop[]
   raw: string
 }
 
@@ -36,8 +42,15 @@ export type SearchStats = {
   operators: Record<string, number>
 }
 
+export type RelatedAssets = {
+  type: string
+  withinM: number
+  assets: Asset[]
+}
+
 export type SearchResult = {
   results: Asset[]
+  related: RelatedAssets[]
   stats: SearchStats
   bounds: [number, number, number, number] | null
   query: ParsedQuery
