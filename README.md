@@ -6,6 +6,10 @@ Search physical infrastructure the way you would say it out loud.
 
 Overwatch is a geospatial search app. You type a place and an asset type. PostGIS answers with the stored geometry (point, line, or polygon). MapLibre draws those shapes on a dark OpenFreeMap vector basemap and clusters centroids at low zoom. There is no Overpass round trip, no Nominatim in the search path, and no Leaflet.
 
+[![Overwatch showcase](docs/showcase.gif)](https://overwatch-ochre.vercel.app/showcase.mp4)
+
+Live at [overwatch-ochre.vercel.app](https://overwatch-ochre.vercel.app). The cut above is also at [`/showcase.mp4`](https://overwatch-ochre.vercel.app/showcase.mp4).
+
 ![Airports near London](docs/screenshots/airports-london.png)
 
 The seeded catalog behind those three queries:
