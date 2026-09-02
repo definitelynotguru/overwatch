@@ -582,3 +582,50 @@ describe('searchAssets', () => {
     }
   })
 })
+
+describe('searchAssets — spatial join hops', () => {
+  it('finds the Thames pipeline within 30 km of airports near london', async () => {
+    const out = await searchAssets('pipelines within 30 km of airports near london')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    const pipe = out.results.find((a) => a.name?.includes('Thames'))
+    expect(pipe).toBeTruthy()
+    expect(pipe!.geometry?.type).toBe('LineString')
+    expect(out.related).toHaveLength(1)
+    expect(out.related[0]!.type).toBe('airport')
+    expect(out.related[0]!.assets.length).toBeGreaterThanOrEqual(1)
+    expect(out.related[0]!.assets.every((a) => a.type === 'airport')).toBe(true)
+  })
+
+  it('finds Isle of Dogs industrial within 20 km of pipelines near london', async () => {
+    const out = await searchAssets('industrial within 20 km of pipelines near london')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    const poly = out.results.find((a) => a.name?.includes('Isle of Dogs'))
+    expect(poly).toBeTruthy()
+    expect(poly!.geometry?.type).toBe('Polygon')
+    expect(out.related[0]!.type).toBe('pipeline')
+    const pipe = out.related[0]!.assets.find((a) => a.name?.includes('Thames'))
+    expect(pipe).toBeTruthy()
+    expect(pipe!.geometry?.type).toBe('LineString')
+  })
+
+  it('does not treat airports near london within 20 km as a join', async () => {
+    const out = await searchAssets('airports near london within 20 km')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    expect(out.query.hops).toEqual([])
+    expect(out.query.radius).toBe(20)
+    expect(out.related).toEqual([])
+    expect(out.results.length).toBeGreaterThan(0)
+    expect(out.results.every((a) => a.type === 'airport')).toBe(true)
+  })
+
+  it('returns empty subject without throwing when a join cannot match', async () => {
+    const out = await searchAssets('pipelines within 1 km of telecom near london')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    expect(out.results).toEqual([])
+    expect(out.stats.total).toBe(0)
+  })
+})
