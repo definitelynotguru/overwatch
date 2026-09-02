@@ -3,7 +3,8 @@ import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { Asset } from '../domain/types'
 
-const STYLE = 'https://tiles.openfreemap.org/styles/dark'
+const OPENFREEMAP_STYLE = 'https://tiles.openfreemap.org/styles/dark'
+const FALLBACK_STYLE = 'https://demotiles.maplibre.org/style.json'
 
 type Props = {
   assets: Asset[]
@@ -27,6 +28,8 @@ function toGeoJSON(assets: Asset[]): GeoJSON.FeatureCollection {
 }
 
 function addLayers(map: maplibregl.Map, cluster: boolean) {
+  if (map.getSource('hits')) return
+
   map.addSource('hits', {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] },
@@ -57,19 +60,6 @@ function addLayers(map: maplibregl.Map, cluster: boolean) {
   })
 
   map.addLayer({
-    id: 'cluster-count',
-    type: 'symbol',
-    source: 'hits',
-    filter: ['has', 'point_count'],
-    layout: {
-      'text-field': ['to-string', ['get', 'point_count']],
-      'text-size': 12,
-      'text-font': ['Noto Sans Regular'],
-    },
-    paint: { 'text-color': '#111111' },
-  })
-
-  map.addLayer({
     id: 'points',
     type: 'circle',
     source: 'hits',
@@ -81,6 +71,37 @@ function addLayers(map: maplibregl.Map, cluster: boolean) {
       'circle-stroke-color': '#ffffff',
     },
   })
+
+  try {
+    map.addLayer({
+      id: 'cluster-count',
+      type: 'symbol',
+      source: 'hits',
+      filter: ['has', 'point_count'],
+      layout: {
+        'text-field': ['to-string', ['get', 'point_count']],
+        'text-size': 12,
+        'text-font': ['Noto Sans Regular'],
+      },
+      paint: { 'text-color': '#111111' },
+    })
+  } catch {
+    // Circles stay even if glyphs are missing.
+  }
+}
+
+function dropHitLayers(map: maplibregl.Map) {
+  for (const id of ['cluster-count', 'clusters', 'points']) {
+    if (map.getLayer(id)) map.removeLayer(id)
+  }
+  if (map.getSource('hits')) map.removeSource('hits')
+}
+
+function applyHits(map: maplibregl.Map, assets: Asset[], cluster: boolean) {
+  if (!map.isStyleLoaded()) return
+  if (!map.getSource('hits')) addLayers(map, cluster)
+  const src = map.getSource('hits') as maplibregl.GeoJSONSource | undefined
+  src?.setData(toGeoJSON(assets))
 }
 
 export function MapPane({
@@ -95,22 +116,58 @@ export function MapPane({
   const mapRef = useRef<maplibregl.Map | null>(null)
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
+  const assetsRef = useRef(assets)
+  assetsRef.current = assets
+  const clusterRef = useRef(cluster)
+  clusterRef.current = cluster
 
   useEffect(() => {
     if (!host.current || mapRef.current) return
+    const container = host.current
+    let fellBack = false
     const map = new maplibregl.Map({
-      container: host.current,
-      style: STYLE,
+      container,
+      style: OPENFREEMAP_STYLE,
       center: [0, 20],
       zoom: 2,
       attributionControl: false,
     })
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
-    map.on('load', () => {
-      addLayers(map, cluster)
-      const src = map.getSource('hits') as maplibregl.GeoJSONSource | undefined
-      src?.setData(toGeoJSON(assets))
+    map.resize()
+    const ro = new ResizeObserver(() => {
+      map.resize()
     })
+    ro.observe(container)
+    requestAnimationFrame(() => map.resize())
+
+    const onLoad = () => {
+      applyHits(map, assetsRef.current, clusterRef.current)
+    }
+    const fallback = () => {
+      if (fellBack) return
+      fellBack = true
+      map.setStyle(FALLBACK_STYLE)
+    }
+    map.on('load', onLoad)
+    map.on('style.load', onLoad)
+    if (map.loaded() || map.isStyleLoaded()) onLoad()
+    map.on('error', (e) => {
+      if (fellBack || map.isStyleLoaded()) return
+      if ('sourceId' in e && e.sourceId) return
+      const msg = String((e as { error?: { message?: string } }).error?.message ?? '')
+      if (
+        msg.includes('openfreemap') ||
+        msg.includes('styles/dark') ||
+        msg.includes('Failed to fetch') ||
+        msg.includes('AJAXError')
+      ) {
+        fallback()
+      }
+    })
+    const stall = window.setTimeout(() => {
+      if (!map.isStyleLoaded()) fallback()
+    }, 8000)
+
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
     map.on('click', 'clusters', (e) => {
       const feature = e.features?.[0]
       const id = feature?.properties?.cluster_id
@@ -139,30 +196,26 @@ export function MapPane({
       map.getCanvas().style.cursor = ''
     })
     mapRef.current = map
+
     return () => {
+      window.clearTimeout(stall)
+      ro.disconnect()
       map.remove()
       mapRef.current = null
     }
-    // cluster is applied via a later effect that rebuilds the source
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     const map = mapRef.current
     if (!map?.isStyleLoaded()) return
-    if (!map.getSource('hits')) return
-    map.removeLayer('cluster-count')
-    map.removeLayer('clusters')
-    map.removeLayer('points')
-    map.removeSource('hits')
-    addLayers(map, cluster)
-    ;(map.getSource('hits') as maplibregl.GeoJSONSource).setData(toGeoJSON(assets))
+    dropHitLayers(map)
+    applyHits(map, assets, cluster)
   }, [cluster])
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map?.getSource('hits')) return
-    ;(map.getSource('hits') as maplibregl.GeoJSONSource).setData(toGeoJSON(assets))
+    if (!map) return
+    applyHits(map, assets, clusterRef.current)
     if (assets.length === 0) return
     const bounds = new maplibregl.LngLatBounds()
     for (const a of assets) bounds.extend([a.lon, a.lat])
@@ -212,7 +265,7 @@ export function MapPane({
         </a>
         {' · '}
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">
-          © OpenStreetMap
+          OSM
         </a>
       </div>
     </div>

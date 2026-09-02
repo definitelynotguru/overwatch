@@ -125,4 +125,26 @@ describe('searchAssets', () => {
     if (isSearchError(out)) return
     expect(out.results.length).toBeLessThanOrEqual(500)
   })
+
+  it('does not treat type:airport country:france as invalid_query', async () => {
+    const out = await searchAssets('type:airport country:france')
+    if (isSearchError(out)) {
+      expect(out.code).not.toBe('invalid_query')
+    } else {
+      expect(out.stats.total).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('tight near radius is not larger than region for telecom in karnataka', async () => {
+    const region = await searchAssets('telecom in karnataka')
+    const tight = await searchAssets('telecom near karnataka radius:5')
+    expect(isSearchError(region)).toBe(false)
+    expect(isSearchError(tight)).toBe(false)
+    if (isSearchError(region) || isSearchError(tight)) return
+    expect(typeof region.stats.total).toBe('number')
+    expect(typeof tight.stats.total).toBe('number')
+    expect(region.stats.total).toBeGreaterThanOrEqual(0)
+    expect(tight.stats.total).toBeGreaterThanOrEqual(0)
+    expect(tight.stats.total).toBeLessThanOrEqual(region.stats.total)
+  })
 })
