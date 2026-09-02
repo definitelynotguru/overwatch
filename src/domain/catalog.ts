@@ -1452,14 +1452,22 @@ export const OPERATOR_ALIASES: Readonly<Record<string, readonly string[]>> = {
   "reliance": ["reliance industries", "ril"],
 }
 
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function hasWord(haystack: string, needle: string): boolean {
+  if (!needle) return false
+  return new RegExp(`\\b${escapeRe(needle)}\\b`, 'i').test(haystack)
+}
+
 export function resolveOperator(text: string): string | null {
   const normalized = text.toLowerCase()
   for (const [canonical, aliases] of Object.entries(OPERATOR_ALIASES)) {
-    if (normalized.includes(canonical)) return canonical
+    if (hasWord(normalized, canonical)) return canonical
     for (const alias of aliases) {
-      if (alias && normalized.includes(alias)) return canonical
+      if (alias && hasWord(normalized, alias)) return canonical
     }
   }
   return null
 }
-

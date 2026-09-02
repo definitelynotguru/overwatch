@@ -62,4 +62,67 @@ describe('searchAssets', () => {
     expect(out.stats.total).toBeGreaterThan(5)
     expect(out.results.every((a) => a.type === 'telecom')).toBe(true)
   })
+
+  it('returns unknown_place for airports near atlantis', async () => {
+    const out = await searchAssets('airports near atlantis')
+    expect(isSearchError(out)).toBe(true)
+    if (!isSearchError(out)) return
+    expect(out.code).toBe('unknown_place')
+  })
+
+  it('returns invalid_query for near london, airports, and empty string', async () => {
+    for (const q of ['near london', 'airports', '']) {
+      const out = await searchAssets(q)
+      expect(isSearchError(out)).toBe(true)
+      if (!isSearchError(out)) continue
+      expect(out.code).toBe('invalid_query')
+    }
+  })
+
+  it('returns the same count for operator airtel vs Airtel', async () => {
+    const lower = await searchAssets('operator:airtel region:karnataka')
+    const mixed = await searchAssets('operator:Airtel region:karnataka')
+    expect(isSearchError(lower)).toBe(false)
+    expect(isSearchError(mixed)).toBe(false)
+    if (isSearchError(lower) || isSearchError(mixed)) return
+    expect(lower.stats.total).toBeGreaterThan(0)
+    expect(lower.stats.total).toBe(mixed.stats.total)
+  })
+
+  it('does not treat operator percent or underscore as a wildcard', async () => {
+    const all = await searchAssets('airports near london')
+    const pct = await searchAssets('type:airport operator:% near:london')
+    const under = await searchAssets('type:airport operator:_ near:london')
+    expect(isSearchError(all)).toBe(false)
+    expect(isSearchError(pct)).toBe(false)
+    expect(isSearchError(under)).toBe(false)
+    if (isSearchError(all) || isSearchError(pct) || isSearchError(under)) return
+    expect(all.stats.total).toBeGreaterThan(0)
+    expect(pct.stats.total).toBeLessThan(all.stats.total)
+    expect(under.stats.total).toBeLessThan(all.stats.total)
+  })
+
+  it('returns a smaller or equal total for radius 5 near london than the default', async () => {
+    const def = await searchAssets('airports near london')
+    const tight = await searchAssets('airports near london radius:5')
+    expect(isSearchError(def)).toBe(false)
+    expect(isSearchError(tight)).toBe(false)
+    if (isSearchError(def) || isSearchError(tight)) return
+    expect(tight.stats.total).toBeLessThanOrEqual(def.stats.total)
+  })
+
+  it('returns total 0 rather than an error for a no-hit query', async () => {
+    const out = await searchAssets('type:zoo near:london')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    expect(out.stats.total).toBe(0)
+    expect(out.results).toEqual([])
+  })
+
+  it('never returns more than 500 results', async () => {
+    const out = await searchAssets('airports near london')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    expect(out.results.length).toBeLessThanOrEqual(500)
+  })
 })

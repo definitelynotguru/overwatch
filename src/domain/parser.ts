@@ -1,7 +1,9 @@
 import { resolveOperator, resolveType, typePhrases } from './catalog'
 import type { ParsedQuery } from './types'
 
-const KEY_VALUE = /(?:^|\s)(type|operator|region|country|near|radius):([^\s]+)/gi
+const TYPE_PHRASES = typePhrases()
+
+const KEY_VALUE = /(?:^|\s)(type|operator|region|country|near|radius):(?:"([^"]*)"|([^\s]+))/gi
 const NEAR = /\bnear\s+(.+?)(?:\s+(?:in|within|radius)\b|$)/i
 const IN = /\bin\s+(.+?)(?:\s+(?:near|within|radius)\b|$)/i
 const RADIUS = /(?:within|radius)\s*[:=]?\s*(\d+)\s*(?:km|kilometers?|kilometres?)?/i
@@ -37,7 +39,7 @@ export function parseQuery(input: string): ParsedQuery {
   let rest = raw
   for (const match of raw.matchAll(KEY_VALUE)) {
     const key = match[1]!.toLowerCase()
-    const val = match[2]!.replace(/_/g, ' ')
+    const val = (match[2] ?? match[3] ?? '').replace(/_/g, ' ')
     if (key === 'type') result.type = resolveType(val)
     else if (key === 'operator') result.operator = val.toLowerCase()
     else if (key === 'region') result.region = val
@@ -53,7 +55,7 @@ export function parseQuery(input: string): ParsedQuery {
 
   if (!result.type) {
     const lower = rest.toLowerCase()
-    for (const { phrase, id } of typePhrases()) {
+    for (const { phrase, id } of TYPE_PHRASES) {
       const re = new RegExp(`\\b${escapeRe(phrase)}s?\\b`, 'i')
       if (re.test(lower)) {
         result.type = id

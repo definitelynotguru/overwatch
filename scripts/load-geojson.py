@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, os, subprocess, sys
+import json, math, os, subprocess, sys
 
 RULES = [
     ("airport", {"aeroway": "aerodrome"}),
@@ -41,7 +41,15 @@ def main():
         coords = geom.get("coordinates") or []
         if len(coords) < 2:
             continue
-        lon, lat = coords[0], coords[1]
+        try:
+            lon = float(coords[0])
+            lat = float(coords[1])
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(lon) or not math.isfinite(lat):
+            continue
+        if lon < -180 or lon > 180 or lat < -90 or lat > 90:
+            continue
         props = {k: str(v) for k, v in (f.get("properties") or {}).items() if v is not None}
         cid = classify(props)
         if not cid:

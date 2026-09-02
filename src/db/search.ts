@@ -105,64 +105,67 @@ export async function searchAssets(q: string): Promise<SearchResult | SearchErro
   const useNear = Boolean(query.near)
   const radiusM = query.radius * 1000
   const typeFilter = type ? sql`AND a.canonical_type = ${type}` : sql``
-  const operatorFilter = operator
-    ? sql`AND a.operator ILIKE ${'%' + operator + '%'}`
+  const likePattern = operator
+    ? '%' + operator.replace(/[\\%_]/g, '\\$&') + '%'
+    : null
+  const operatorFilter = likePattern
+    ? sql`AND a.operator ILIKE ${likePattern} ESCAPE '\\'`
     : sql``
   const geoFilter = useNear
     ? sql`AND ST_DWithin(a.geom, (SELECT geom FROM places WHERE id = ${place.id}), ${radiusM})`
     : sql`AND ST_Intersects(a.geom::geometry, (SELECT bbox FROM places WHERE id = ${place.id}))`
 
-  const [countRow] = await sql<[{ n: number }]>`
-    SELECT count(*)::int AS n
-    FROM assets a
-    WHERE 1=1
-      ${typeFilter}
-      ${operatorFilter}
-      ${geoFilter}
-  `
-
-  const typeRows = await sql<{ canonical_type: string; n: number }[]>`
-    SELECT a.canonical_type, count(*)::int AS n
-    FROM assets a
-    WHERE 1=1
-      ${typeFilter}
-      ${operatorFilter}
-      ${geoFilter}
-    GROUP BY a.canonical_type
-    ORDER BY n DESC
-  `
-
-  const operatorRows = await sql<{ operator: string; n: number }[]>`
-    SELECT coalesce(nullif(btrim(a.operator), ''), 'Unknown') AS operator, count(*)::int AS n
-    FROM assets a
-    WHERE 1=1
-      ${typeFilter}
-      ${operatorFilter}
-      ${geoFilter}
-    GROUP BY 1
-    ORDER BY n DESC
-    LIMIT 40
-  `
-
-  const rows = await sql<AssetRow[]>`
-    SELECT
-      a.id,
-      a.osm_type,
-      a.osm_id,
-      a.name,
-      a.canonical_type,
-      a.operator,
-      ST_Y(a.geom::geometry) AS lat,
-      ST_X(a.geom::geometry) AS lon,
-      a.tags
-    FROM assets a
-    WHERE 1=1
-      ${typeFilter}
-      ${operatorFilter}
-      ${geoFilter}
-    ORDER BY a.name NULLS LAST, a.id
-    LIMIT ${RESULT_CAP}
-  `
+  const [countRows, typeRows, operatorRows, rows] = await Promise.all([
+    sql<[{ n: number }]>`
+      SELECT count(*)::int AS n
+      FROM assets a
+      WHERE 1=1
+        ${typeFilter}
+        ${operatorFilter}
+        ${geoFilter}
+    `,
+    sql<{ canonical_type: string; n: number }[]>`
+      SELECT a.canonical_type, count(*)::int AS n
+      FROM assets a
+      WHERE 1=1
+        ${typeFilter}
+        ${operatorFilter}
+        ${geoFilter}
+      GROUP BY a.canonical_type
+      ORDER BY n DESC
+    `,
+    sql<{ operator: string; n: number }[]>`
+      SELECT coalesce(nullif(btrim(a.operator), ''), 'Unknown') AS operator, count(*)::int AS n
+      FROM assets a
+      WHERE 1=1
+        ${typeFilter}
+        ${operatorFilter}
+        ${geoFilter}
+      GROUP BY 1
+      ORDER BY n DESC
+      LIMIT 40
+    `,
+    sql<AssetRow[]>`
+      SELECT
+        a.id,
+        a.osm_type,
+        a.osm_id,
+        a.name,
+        a.canonical_type,
+        a.operator,
+        ST_Y(a.geom::geometry) AS lat,
+        ST_X(a.geom::geometry) AS lon,
+        a.tags
+      FROM assets a
+      WHERE 1=1
+        ${typeFilter}
+        ${operatorFilter}
+        ${geoFilter}
+      ORDER BY a.name NULLS LAST, a.id
+      LIMIT ${RESULT_CAP}
+    `,
+  ])
+  const countRow = countRows[0]
 
   const types: Record<string, number> = {}
   for (const row of typeRows) types[row.canonical_type] = Number(row.n)

@@ -76,3 +76,58 @@ describe('validateQuery', () => {
     expect(validateQuery(parseQuery('type:airport near:london radius:50')).valid).toBe(true)
   })
 })
+
+describe('validateQuery — empty input', () => {
+  it('rejects empty, whitespace, and newline-only queries', () => {
+    expect(validateQuery(parseQuery('')).valid).toBe(false)
+    expect(validateQuery(parseQuery('   ')).valid).toBe(false)
+    expect(validateQuery(parseQuery('\n')).valid).toBe(false)
+    expect(validateQuery(parseQuery('\n\t  \n')).valid).toBe(false)
+  })
+})
+
+describe('parseQuery — quoted structured values', () => {
+  it('accepts quoted multi-word operator and region', () => {
+    const q = parseQuery('operator:"Long Island Rail Road" region:"new york"')
+    expect(q.operator).toBe('long island rail road')
+    expect(q.region).toBe('new york')
+  })
+
+  it('keeps unquoted values as a single token', () => {
+    const q = parseQuery('operator:Long region:new york')
+    expect(q.operator).toBe('long')
+    expect(q.region).toBe('new')
+  })
+})
+
+describe('parseQuery — radius', () => {
+  it('clamps radius 0 to 1', () => {
+    expect(parseQuery('type:airport near:london radius:0').radius).toBe(1)
+  })
+
+  it('leaves radius foo at the default 50', () => {
+    expect(parseQuery('type:airport near:london radius:foo').radius).toBe(50)
+  })
+
+  it('parses kilometers as the radius unit', () => {
+    expect(parseQuery('airports near london within 20 kilometers').radius).toBe(20)
+    expect(parseQuery('airports near london within 15 kilometres').radius).toBe(15)
+  })
+})
+
+describe('parseQuery — operator word boundaries', () => {
+  it('does not treat appleton as operator apple', () => {
+    expect(parseQuery('appleton near london').operator).toBeNull()
+    expect(parseQuery('airports near appleton').operator).toBeNull()
+  })
+
+  it('does not treat orange as a substring of a longer word', () => {
+    expect(parseQuery('oranges near london').operator).toBeNull()
+    expect(parseQuery('airports in orangeland').operator).toBeNull()
+  })
+
+  it('resolves the word airtel as an operator', () => {
+    expect(parseQuery('airtel in karnataka').operator).toBe('airtel')
+    expect(parseQuery('operator:airtel region:karnataka').operator).toBe('airtel')
+  })
+})
