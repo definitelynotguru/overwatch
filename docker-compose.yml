@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.5
+    container_name: overwatch-postgres
+    environment:
+      POSTGRES_USER: overwatch
+      POSTGRES_PASSWORD: overwatch
+      POSTGRES_DB: overwatch
+    ports:
+      - "5432:5432"
+    volumes:
+      - overwatch_pg:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U overwatch -d overwatch"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 8s
+
+volumes:
+  overwatch_pg:
