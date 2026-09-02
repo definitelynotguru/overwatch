@@ -9,8 +9,10 @@
     "preview": "vite preview",
     "test": "vitest run",
     "db:up": "docker compose up -d postgres",
-    "db:schema": "sh -c 'docker compose exec -T postgres psql -U overwatch -d overwatch < db/schema.sql'",
-    "db:seed": "sh -c 'docker compose exec -T postgres psql -U overwatch -d overwatch < db/seed.sql'"
+    "db:schema": "./scripts/apply-sql.sh db/schema.sql",
+    "db:migrate": "./scripts/apply-sql.sh db/migrate_geom.sql",
+    "db:seed": "./scripts/apply-sql.sh db/seed.sql",
+    "db:gazetteer": "./scripts/load-gazetteer.sh"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.0",

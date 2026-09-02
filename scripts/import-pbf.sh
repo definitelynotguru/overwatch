@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Import a local Geofabrik extract into Overwatch. Never fetches data.
+# Nodes stay points. Ways stay linestrings. Closed ways / multipolygons that
+# are areas stay polygons. No centroid-on-import.
 # Usage: ./scripts/import-pbf.sh /path/to/region-latest.osm.pbf
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -12,5 +14,5 @@ command -v osmium >/dev/null || { echo "install osmium-tool"; exit 1; }
 TMP="$(mktemp -d)"
 trap "rm -rf $TMP" EXIT
 osmium tags-filter "$PBF" nwr/aeroway nwr/man_made nwr/power nwr/industrial nwr/landuse=port nwr/building=data_centre -o "$TMP/filtered.osm.pbf" --overwrite
-osmium export "$TMP/filtered.osm.pbf" --geometry-types=point -o "$TMP/points.geojson" --overwrite
-python3 "$ROOT/scripts/load-geojson.py" "$TMP/points.geojson"
+osmium export "$TMP/filtered.osm.pbf" --geometry-types=point,linestring,polygon -o "$TMP/features.geojson" --overwrite
+python3 "$ROOT/scripts/load-geojson.py" "$TMP/features.geojson"

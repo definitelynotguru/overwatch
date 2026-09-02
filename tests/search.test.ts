@@ -1,7 +1,25 @@
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { searchAssets } from '../src/db/search'
 import { sql } from '../src/db/client'
 import { isSearchError } from '../src/domain/types'
+
+
+beforeAll(async () => {
+  await sql`
+    INSERT INTO places (name, aliases, kind, geom, bbox) VALUES
+      ('Berlin', ARRAY['berlin de', 'berlin germany']::text[], 'city',
+        ST_SetSRID(ST_MakePoint(13.4050, 52.5200), 4326)::geography,
+        ST_MakeEnvelope(13.088, 52.338, 13.761, 52.675, 4326)),
+      ('Texas', ARRAY['tx', 'texas us']::text[], 'region',
+        ST_SetSRID(ST_MakePoint(-99.9018, 31.9686), 4326)::geography,
+        ST_MakeEnvelope(-106.646, 25.837, -93.508, 36.501, 4326))
+    ON CONFLICT ((lower(name))) DO UPDATE SET
+      aliases = EXCLUDED.aliases,
+      kind = EXCLUDED.kind,
+      geom = EXCLUDED.geom,
+      bbox = EXCLUDED.bbox
+  `
+})
 
 afterAll(async () => {
   await sql.end({ timeout: 2 })
@@ -146,5 +164,44 @@ describe('searchAssets', () => {
     expect(region.stats.total).toBeGreaterThanOrEqual(0)
     expect(tight.stats.total).toBeGreaterThanOrEqual(0)
     expect(tight.stats.total).toBeLessThanOrEqual(region.stats.total)
+  })
+
+  it('returns real linestring geometry for the seeded Thames pipeline', async () => {
+    const out = await searchAssets('pipelines near london')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    const pipe = out.results.find((a) => a.name?.includes('Thames'))
+    expect(pipe).toBeTruthy()
+    expect(pipe!.geometry?.type).toBe('LineString')
+    expect(pipe!.geometry?.type).not.toBe('Point')
+    const coords = pipe!.geometry?.coordinates as number[][]
+    expect(Array.isArray(coords)).toBe(true)
+    expect(coords.length).toBeGreaterThan(1)
+    expect(coords[0]?.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('returns real polygon geometry for the seeded industrial estate', async () => {
+    const out = await searchAssets('type:industrial near:london')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    const poly = out.results.find((a) => a.name?.includes('Isle of Dogs'))
+    expect(poly).toBeTruthy()
+    expect(poly!.geometry?.type).toBe('Polygon')
+  })
+
+  it('resolves fixture place Berlin instead of unknown_place', async () => {
+    const out = await searchAssets('airports near berlin')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    expect(out.place?.name).toMatch(/berlin/i)
+    expect(out.place?.kind).toBe('city')
+  })
+
+  it('resolves fixture place Texas instead of unknown_place', async () => {
+    const out = await searchAssets('airports in texas')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    expect(out.place?.name).toMatch(/texas/i)
+    expect(out.place?.kind).toBe('region')
   })
 })
