@@ -224,8 +224,15 @@ def download_file(url, dest):
         return
     print("downloading", dest.name)
     req = Request(url, headers={"User-Agent": "overwatch-gazetteer/1"})
-    with urlopen(req, timeout=120) as resp, open(dest, "wb") as out:
-        out.write(resp.read())
+    tmp = dest.with_name(dest.name + ".part")
+    try:
+        with urlopen(req, timeout=120) as resp, open(tmp, "wb") as out:
+            out.write(resp.read())
+        tmp.replace(dest)
+    except Exception:
+        if tmp.exists():
+            tmp.unlink()
+        raise
 
 
 def ensure_ne_files(countries, admin1, places):
