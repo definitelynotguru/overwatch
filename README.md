@@ -83,6 +83,7 @@ bridges in new york
 telecom towers in karnataka
 airports near london within 20 km
 airtel in karnataka
+pipelines within 20 km of airports near london
 ```
 
 Structured tokens. Quote a value when it has spaces.
@@ -101,6 +102,8 @@ operator:"Long Island Rail Road" region:"new york"
 | `region` / `country` | Place name. `country` prefers a country row when resolving |
 | `near` | Place name plus radius search |
 | `radius` | Kilometers, 1-500. Default 50. Used only with `near` |
+
+`within N km of <type>` is a spatial join hop (up to 3); the place filter applies only to the innermost type.
 
 You need a type or an operator, and you need a place. Missing either returns `invalid_query`. A place missing from the places table returns `unknown_place`.
 

@@ -2,18 +2,22 @@ import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { Feature, FeatureCollection, Geometry, Point } from 'geojson'
-import type { Asset, AssetGeometry } from '../domain/types'
+import type { Asset, AssetGeometry, RelatedAssets } from '../domain/types'
 
 const OPENFREEMAP_STYLE = 'https://tiles.openfreemap.org/styles/dark'
 const FALLBACK_STYLE = 'https://demotiles.maplibre.org/style.json'
 
+const HOP_COLORS = ['#f59e0b', '#34d399', '#a78bfa'] as const
+
 type Props = {
   assets: Asset[]
+  related?: RelatedAssets[]
   cluster: boolean
   selectedId: string | null
   flyTo: Asset | null
   onSelect: (id: string) => void
   onClusterChange: (cluster: boolean) => void
+  legend?: string[]
 }
 
 function centroidPoint(a: Asset): Point {
@@ -69,91 +73,151 @@ function extendGeometry(bounds: maplibregl.LngLatBounds, geom: AssetGeometry | G
   if (geom && 'coordinates' in geom) walkCoords(geom.coordinates, (x, y) => bounds.extend([x, y]))
 }
 
+function addRelatedLayers(map: maplibregl.Map) {
+  for (let i = 0; i < HOP_COLORS.length; i++) {
+    const src = `related-${i}`
+    const shapes = `related-${i}-shapes`
+    if (!map.getSource(src)) {
+      map.addSource(src, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      })
+    }
+    if (!map.getSource(shapes)) {
+      map.addSource(shapes, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      })
+    }
+    const color = HOP_COLORS[i]!
+    const fills = `related-${i}-fills`
+    const lines = `related-${i}-lines`
+    const points = `related-${i}-points`
+    if (!map.getLayer(fills)) {
+      map.addLayer({
+        id: fills,
+        type: 'fill',
+        source: shapes,
+        filter: ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+        paint: {
+          'fill-color': color,
+          'fill-opacity': 0.28,
+        },
+      })
+    }
+    if (!map.getLayer(lines)) {
+      map.addLayer({
+        id: lines,
+        type: 'line',
+        source: shapes,
+        paint: {
+          'line-color': color,
+          'line-width': 3,
+        },
+      })
+    }
+    if (!map.getLayer(points)) {
+      map.addLayer({
+        id: points,
+        type: 'circle',
+        source: src,
+        paint: {
+          'circle-color': color,
+          'circle-radius': 6,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#ffffff',
+        },
+      })
+    }
+  }
+}
+
 function addLayers(map: maplibregl.Map, cluster: boolean) {
-  if (map.getSource('hits')) return
+  if (!map.getSource('hits')) {
+    map.addSource('hits', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+      cluster,
+      clusterMaxZoom: 14,
+      clusterRadius: 50,
+    })
+    map.addSource('hits-shapes', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    })
 
-  map.addSource('hits', {
-    type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
-    cluster,
-    clusterMaxZoom: 14,
-    clusterRadius: 50,
-  })
-  map.addSource('hits-shapes', {
-    type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
-  })
-
-  map.addLayer({
-    id: 'hit-fills',
-    type: 'fill',
-    source: 'hits-shapes',
-    filter: ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
-    paint: {
-      'fill-color': '#3b82f6',
-      'fill-opacity': 0.28,
-    },
-  })
-  map.addLayer({
-    id: 'hit-lines',
-    type: 'line',
-    source: 'hits-shapes',
-    paint: {
-      'line-color': '#60a5fa',
-      'line-width': 3,
-    },
-  })
-
-  map.addLayer({
-    id: 'clusters',
-    type: 'circle',
-    source: 'hits',
-    filter: ['has', 'point_count'],
-    paint: {
-      'circle-color': [
-        'step',
-        ['get', 'point_count'],
-        '#60a5fa',
-        8,
-        '#fbbf24',
-        25,
-        '#f97316',
-      ],
-      'circle-radius': ['step', ['get', 'point_count'], 16, 8, 20, 25, 26],
-      'circle-stroke-width': 2,
-      'circle-stroke-color': '#0b0b0b',
-    },
-  })
-
-  map.addLayer({
-    id: 'points',
-    type: 'circle',
-    source: 'hits',
-    filter: ['!', ['has', 'point_count']],
-    paint: {
-      'circle-color': '#3b82f6',
-      'circle-radius': 6,
-      'circle-stroke-width': 1.5,
-      'circle-stroke-color': '#ffffff',
-    },
-  })
-
-  try {
     map.addLayer({
-      id: 'cluster-count',
-      type: 'symbol',
+      id: 'hit-fills',
+      type: 'fill',
+      source: 'hits-shapes',
+      filter: ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+      paint: {
+        'fill-color': '#3b82f6',
+        'fill-opacity': 0.28,
+      },
+    })
+    map.addLayer({
+      id: 'hit-lines',
+      type: 'line',
+      source: 'hits-shapes',
+      paint: {
+        'line-color': '#60a5fa',
+        'line-width': 3,
+      },
+    })
+
+    map.addLayer({
+      id: 'clusters',
+      type: 'circle',
       source: 'hits',
       filter: ['has', 'point_count'],
-      layout: {
-        'text-field': ['to-string', ['get', 'point_count']],
-        'text-size': 12,
-        'text-font': ['Noto Sans Regular'],
+      paint: {
+        'circle-color': [
+          'step',
+          ['get', 'point_count'],
+          '#60a5fa',
+          8,
+          '#fbbf24',
+          25,
+          '#f97316',
+        ],
+        'circle-radius': ['step', ['get', 'point_count'], 16, 8, 20, 25, 26],
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#0b0b0b',
       },
-      paint: { 'text-color': '#111111' },
     })
-  } catch {
-    // Circles stay even if glyphs are missing.
+
+    map.addLayer({
+      id: 'points',
+      type: 'circle',
+      source: 'hits',
+      filter: ['!', ['has', 'point_count']],
+      paint: {
+        'circle-color': '#3b82f6',
+        'circle-radius': 6,
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#ffffff',
+      },
+    })
+
+    try {
+      map.addLayer({
+        id: 'cluster-count',
+        type: 'symbol',
+        source: 'hits',
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': ['to-string', ['get', 'point_count']],
+          'text-size': 12,
+          'text-font': ['Noto Sans Regular'],
+        },
+        paint: { 'text-color': '#111111' },
+      })
+    } catch {
+      // Circles stay even if glyphs are missing.
+    }
   }
+  addRelatedLayers(map)
 }
 
 function dropHitLayers(map: maplibregl.Map) {
@@ -164,22 +228,33 @@ function dropHitLayers(map: maplibregl.Map) {
   if (map.getSource('hits-shapes')) map.removeSource('hits-shapes')
 }
 
-function applyHits(map: maplibregl.Map, assets: Asset[], cluster: boolean) {
+function applyHits(map: maplibregl.Map, assets: Asset[], cluster: boolean, related: RelatedAssets[]) {
   if (!map.isStyleLoaded()) return
-  if (!map.getSource('hits')) addLayers(map, cluster)
+  addLayers(map, cluster)
   const src = map.getSource('hits') as maplibregl.GeoJSONSource | undefined
   src?.setData(toCentroidGeoJSON(assets))
   const shapes = map.getSource('hits-shapes') as maplibregl.GeoJSONSource | undefined
   shapes?.setData(toShapeGeoJSON(assets))
+  for (let i = 0; i < HOP_COLORS.length; i++) {
+    const hopAssets = related[i]?.assets ?? []
+    const pts = map.getSource(`related-${i}`) as maplibregl.GeoJSONSource | undefined
+    pts?.setData(toCentroidGeoJSON(hopAssets))
+    const hopShapes = map.getSource(`related-${i}-shapes`) as maplibregl.GeoJSONSource | undefined
+    hopShapes?.setData(toShapeGeoJSON(hopAssets))
+  }
 }
+
+const EMPTY_RELATED: RelatedAssets[] = []
 
 export function MapPane({
   assets,
+  related = EMPTY_RELATED,
   cluster,
   selectedId,
   flyTo,
   onSelect,
   onClusterChange,
+  legend,
 }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
@@ -187,6 +262,8 @@ export function MapPane({
   onSelectRef.current = onSelect
   const assetsRef = useRef(assets)
   assetsRef.current = assets
+  const relatedRef = useRef(related)
+  relatedRef.current = related
   const clusterRef = useRef(cluster)
   clusterRef.current = cluster
 
@@ -209,7 +286,7 @@ export function MapPane({
     requestAnimationFrame(() => map.resize())
 
     const onLoad = () => {
-      applyHits(map, assetsRef.current, clusterRef.current)
+      applyHits(map, assetsRef.current, clusterRef.current, relatedRef.current)
     }
     const fallback = () => {
       if (fellBack) return
@@ -255,7 +332,14 @@ export function MapPane({
     map.on('click', 'points', pick)
     map.on('click', 'hit-lines', pick)
     map.on('click', 'hit-fills', pick)
-    for (const layer of ['clusters', 'points', 'hit-lines', 'hit-fills']) {
+    const hoverLayers = ['clusters', 'points', 'hit-lines', 'hit-fills']
+    for (let i = 0; i < HOP_COLORS.length; i++) {
+      hoverLayers.push(`related-${i}-points`, `related-${i}-lines`, `related-${i}-fills`)
+      map.on('click', `related-${i}-points`, pick)
+      map.on('click', `related-${i}-lines`, pick)
+      map.on('click', `related-${i}-fills`, pick)
+    }
+    for (const layer of hoverLayers) {
       map.on('mouseenter', layer, () => {
         map.getCanvas().style.cursor = 'pointer'
       })
@@ -277,18 +361,20 @@ export function MapPane({
     const map = mapRef.current
     if (!map?.isStyleLoaded()) return
     dropHitLayers(map)
-    applyHits(map, assets, cluster)
+    applyHits(map, assets, cluster, relatedRef.current)
   }, [cluster])
 
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    applyHits(map, assets, clusterRef.current)
-    if (assets.length === 0) return
+    applyHits(map, assets, clusterRef.current, related)
+    const extras = related.flatMap((r) => r.assets)
+    if (assets.length === 0 && extras.length === 0) return
     const bounds = new maplibregl.LngLatBounds()
     for (const a of assets) extendGeometry(bounds, a.geometry, a.lat, a.lon)
+    for (const a of extras) extendGeometry(bounds, a.geometry, a.lat, a.lon)
     map.fitBounds(bounds, { padding: 48, maxZoom: 11, duration: 600 })
-  }, [assets])
+  }, [assets, related])
 
   useEffect(() => {
     if (!flyTo || !mapRef.current) return
@@ -326,11 +412,42 @@ export function MapPane({
         '#3b82f6',
       ])
     }
+    for (let i = 0; i < HOP_COLORS.length; i++) {
+      const color = HOP_COLORS[i]!
+      const points = `related-${i}-points`
+      const lines = `related-${i}-lines`
+      const fills = `related-${i}-fills`
+      if (map.getLayer(points)) {
+        map.setPaintProperty(points, 'circle-radius', [
+          'case',
+          ['==', ['get', 'id'], selectedId ?? ''],
+          9,
+          6,
+        ])
+      }
+      if (map.getLayer(lines)) {
+        map.setPaintProperty(lines, 'line-color', [
+          'case',
+          ['==', ['get', 'id'], selectedId ?? ''],
+          '#fbbf24',
+          color,
+        ])
+      }
+      if (map.getLayer(fills)) {
+        map.setPaintProperty(fills, 'fill-color', [
+          'case',
+          ['==', ['get', 'id'], selectedId ?? ''],
+          '#fbbf24',
+          color,
+        ])
+      }
+    }
   }, [selectedId])
 
   return (
     <div className="map-pane">
       <div className="map-root" ref={host} />
+      {legend && legend.length > 0 ? <div className="map-legend">{legend.join(' · ')}</div> : null}
       <label className="map-cluster-toggle">
         <input
           type="checkbox"
