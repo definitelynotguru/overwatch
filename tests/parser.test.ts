@@ -189,4 +189,56 @@ describe('parseQuery — join hops', () => {
     expect(q.radius).toBe(20)
     expect(q.hops).toEqual([])
   })
+
+  it('parses three hops and caps at three', () => {
+    const q = parseQuery(
+      'warehouses within 5 km of data centers within 10 km of substations within 50 km of airports near london',
+    )
+    expect(q.type).toBe('warehouse')
+    expect(q.hops).toEqual([
+      { type: 'data_center', withinM: 5000 },
+      { type: 'substation', withinM: 10000 },
+      { type: 'airport', withinM: 50000 },
+    ])
+    expect(q.near).toBe('london')
+    expect(q.radius).toBe(50)
+  })
+
+  it('drops a fourth hop and does not copy its distance into radius', () => {
+    const q = parseQuery(
+      'pipelines within 5 km of warehouses within 10 km of data centers within 20 km of substations within 80 km of airports near london',
+    )
+    expect(q.type).toBe('pipeline')
+    expect(q.hops).toEqual([
+      { type: 'warehouse', withinM: 5000 },
+      { type: 'data_center', withinM: 10000 },
+      { type: 'substation', withinM: 20000 },
+    ])
+    expect(q.hops).toHaveLength(3)
+    expect(q.hops.some((h) => h.type === 'airport')).toBe(false)
+    expect(q.radius).toBe(50)
+    expect(q.near).toBe('london')
+  })
+
+  it('does not treat within 20 km of london as a hop', () => {
+    const q = parseQuery('airports near london within 20 km of london')
+    expect(q.type).toBe('airport')
+    expect(q.hops).toEqual([])
+    expect(q.near).toBe('london')
+  })
+
+  it('keeps hop distance and trailing place radius', () => {
+    const q = parseQuery('pipelines within 20 km of airports near london within 5 km')
+    expect(q.type).toBe('pipeline')
+    expect(q.hops).toEqual([{ type: 'airport', withinM: 20000 }])
+    expect(q.radius).toBe(5)
+    expect(q.near).toBe('london')
+  })
+
+  it('clamps hop distance 0 km to 1 km and 900 km to 500 km', () => {
+    const low = parseQuery('pipelines within 0 km of airports near london')
+    expect(low.hops).toEqual([{ type: 'airport', withinM: 1000 }])
+    const high = parseQuery('pipelines within 900 km of airports near london')
+    expect(high.hops).toEqual([{ type: 'airport', withinM: 500000 }])
+  })
 })

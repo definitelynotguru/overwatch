@@ -74,7 +74,7 @@ function extendGeometry(bounds: maplibregl.LngLatBounds, geom: AssetGeometry | G
 }
 
 function addRelatedLayers(map: maplibregl.Map) {
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < HOP_COLORS.length; i++) {
     const src = `related-${i}`
     const shapes = `related-${i}-shapes`
     if (!map.getSource(src)) {
@@ -235,7 +235,7 @@ function applyHits(map: maplibregl.Map, assets: Asset[], cluster: boolean, relat
   src?.setData(toCentroidGeoJSON(assets))
   const shapes = map.getSource('hits-shapes') as maplibregl.GeoJSONSource | undefined
   shapes?.setData(toShapeGeoJSON(assets))
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < HOP_COLORS.length; i++) {
     const hopAssets = related[i]?.assets ?? []
     const pts = map.getSource(`related-${i}`) as maplibregl.GeoJSONSource | undefined
     pts?.setData(toCentroidGeoJSON(hopAssets))
@@ -333,7 +333,7 @@ export function MapPane({
     map.on('click', 'hit-lines', pick)
     map.on('click', 'hit-fills', pick)
     const hoverLayers = ['clusters', 'points', 'hit-lines', 'hit-fills']
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < HOP_COLORS.length; i++) {
       hoverLayers.push(`related-${i}-points`, `related-${i}-lines`, `related-${i}-fills`)
       map.on('click', `related-${i}-points`, pick)
       map.on('click', `related-${i}-lines`, pick)
@@ -412,7 +412,7 @@ export function MapPane({
         '#3b82f6',
       ])
     }
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < HOP_COLORS.length; i++) {
       const color = HOP_COLORS[i]!
       const points = `related-${i}-points`
       const lines = `related-${i}-lines`

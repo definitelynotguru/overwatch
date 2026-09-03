@@ -6,7 +6,7 @@ const TYPE_PHRASES = typePhrases()
 const KEY_VALUE = /(?:^|\s)(type|operator|region|country|near|radius):(?:"([^"]*)"|([^\s]+))/gi
 const NEAR = /\bnear\s+(.+?)(?:\s+(?:in|within|radius)\b|$)/i
 const IN = /\bin\s+(.+?)(?:\s+(?:near|within|radius)\b|$)/i
-const RADIUS = /(?:within|radius)\s*[:=]?\s*(\d+)\s*(?:km|kilometers?|kilometres?)?/i
+const RADIUS = /(?:within|radius)\s*[:=]?\s*(\d+)(?!\d)(?:\s*(?:km|kilometers?|kilometres?))?(?!\s+(?:km|kilometers?|kilometres?)\b)(?!\s+of\b)/i
 const HOP_PREFIX =
   /\bwithin\s*[:=]?\s*(\d+)\s*(?:km|kilometers?|kilometres?)?\s+of\s+/i
 const STOP = /\b(the|a|an|all|show|find|search|get|list|of|for)\b/gi
