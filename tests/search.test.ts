@@ -327,14 +327,23 @@ describe('searchAssets', () => {
           bbox = EXCLUDED.bbox
       `
       await sql`
-        INSERT INTO assets (osm_type, osm_id, name, canonical_type, geom, tags) VALUES (
-          'node',
-          9290010002,
-          'Test Aleutia Airport',
-          'airport',
-          ST_SetSRID(ST_MakePoint(170.2, 50.1), 4326),
-          '{}'::jsonb
-        )
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, geom, tags) VALUES
+          (
+            'node',
+            9290010002,
+            'Test Aleutia Airport',
+            'airport',
+            ST_SetSRID(ST_MakePoint(170.2, 50.1), 4326),
+            '{}'::jsonb
+          ),
+          (
+            'node',
+            9290010004,
+            'Test Aleutia Gap Airport',
+            'airport',
+            ST_SetSRID(ST_MakePoint(0, 50), 4326),
+            '{}'::jsonb
+          )
         ON CONFLICT (osm_type, osm_id) DO UPDATE SET
           name = EXCLUDED.name,
           canonical_type = EXCLUDED.canonical_type,
@@ -346,8 +355,9 @@ describe('searchAssets', () => {
       if (isSearchError(out)) return
       expect(out.place?.name).toMatch(/aleutia/i)
       expect(out.results.some((a) => a.osmId === 9290010002)).toBe(true)
+      expect(out.results.some((a) => a.osmId === 9290010004)).toBe(false)
     } finally {
-      await sql`DELETE FROM assets WHERE osm_id = 9290010002`
+      await sql`DELETE FROM assets WHERE osm_id IN (9290010002, 9290010004)`
       await sql`DELETE FROM places WHERE lower(name) = 'aleutia'`
     }
   })
@@ -377,6 +387,72 @@ describe('searchAssets', () => {
       expect(Number(row.span)).toBeLessThan(1)
     } finally {
       await sql`DELETE FROM assets WHERE osm_id = 9290010003`
+    }
+  })
+
+  it('keeps a tight envelope for a non-dateline way', async () => {
+    try {
+      await sql`
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, geom, tags) VALUES (
+          'way',
+          9290010005,
+          'London Test Way',
+          'pipeline',
+          ST_SetSRID(ST_GeomFromText('LINESTRING(-0.14 51.50, -0.08 51.50)'), 4326),
+          '{}'::jsonb
+        )
+        ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+          name = EXCLUDED.name,
+          canonical_type = EXCLUDED.canonical_type,
+          geom = EXCLUDED.geom,
+          tags = EXCLUDED.tags
+      `
+      const [row] = await sql<{ span: number }[]>`
+        SELECT ST_XMax(bbox) - ST_XMin(bbox) AS span
+        FROM assets
+        WHERE osm_id = 9290010005
+      `
+      expect(Number(row.span)).toBeGreaterThan(0.01)
+      expect(Number(row.span)).toBeLessThan(1)
+    } finally {
+      await sql`DELETE FROM assets WHERE osm_id = 9290010005`
+    }
+  })
+
+  it('keeps the larger bbox on same name and kind conflict', async () => {
+    try {
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'Washland',
+          ARRAY['washland test']::text[],
+          'region',
+          ST_SetSRID(ST_MakePoint(0.05, 0.05), 4326)::geography,
+          ST_MakeEnvelope(0, 0, 0.1, 0.1, 4326)
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          bbox = EXCLUDED.bbox
+          WHERE ST_Area(EXCLUDED.bbox::geography) > ST_Area(places.bbox::geography)
+      `
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'Washland',
+          ARRAY['washland test']::text[],
+          'region',
+          ST_SetSRID(ST_MakePoint(0, 0), 4326)::geography,
+          ST_MakeEnvelope(-10, -10, 20, 15, 4326)
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          bbox = EXCLUDED.bbox
+          WHERE ST_Area(EXCLUDED.bbox::geography) > ST_Area(places.bbox::geography)
+      `
+      const [row] = await sql<{ xmax: number }[]>`
+        SELECT ST_XMax(bbox) AS xmax
+        FROM places
+        WHERE lower(name) = 'washland' AND kind = 'region'
+      `
+      expect(Number(row.xmax)).toBeGreaterThanOrEqual(20)
+    } finally {
+      await sql`DELETE FROM places WHERE lower(name) = 'washland'`
     }
   })
 })

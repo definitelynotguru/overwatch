@@ -52,10 +52,6 @@ ALTER TABLE places
 DROP INDEX IF EXISTS places_name_lower_uidx;
 CREATE UNIQUE INDEX IF NOT EXISTS places_name_kind_lower_uidx ON places (lower(name), kind);
 
-DROP INDEX IF EXISTS assets_bbox_gix;
-ALTER TABLE assets DROP COLUMN IF EXISTS bbox;
-
-DROP FUNCTION IF EXISTS overwatch_asset_bbox(geometry);
 CREATE OR REPLACE FUNCTION overwatch_asset_bbox(g geometry)
 RETURNS geometry
 LANGUAGE sql
@@ -83,9 +79,35 @@ AS $$
   FROM (SELECT ST_Centroid(g::geography)::geometry AS c) s;
 $$;
 
-ALTER TABLE assets
-  ADD COLUMN bbox geometry(Polygon, 4326)
-  GENERATED ALWAYS AS (overwatch_asset_bbox(geom)) STORED;
+DO $$
+DECLARE
+  bbox_expr text;
+BEGIN
+  SELECT pg_get_expr(d.adbin, d.adrelid)
+    INTO bbox_expr
+  FROM pg_attrdef d
+  JOIN pg_attribute a ON a.attrelid = d.adrelid AND a.attnum = d.adnum
+  JOIN pg_class c ON c.oid = d.adrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public'
+    AND c.relname = 'assets'
+    AND a.attname = 'bbox';
+
+  IF bbox_expr IS NOT NULL AND position('overwatch_asset_bbox' in bbox_expr) = 0 THEN
+    DROP INDEX IF EXISTS assets_bbox_gix;
+    ALTER TABLE assets DROP COLUMN bbox;
+    bbox_expr := NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'assets' AND column_name = 'bbox'
+  ) THEN
+    ALTER TABLE assets
+      ADD COLUMN bbox geometry(Polygon, 4326)
+      GENERATED ALWAYS AS (overwatch_asset_bbox(geom)) STORED;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS assets_geom_gix ON assets USING GIST (geom);
 CREATE INDEX IF NOT EXISTS assets_geom_geog_gix ON assets USING GIST ((geom::geography));
