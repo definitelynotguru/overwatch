@@ -151,6 +151,7 @@ function subjectJoinSql(hops: JoinHop[], placeId: number, useNear: boolean, radi
             SELECT 1 FROM assets h1
             WHERE h1.canonical_type = ${p1.type}
               AND h1.id <> h0.id
+              AND h1.id <> a.id
               AND ST_DWithin(h0.geom::geography, h1.geom::geography, ${p1.withinM})
               ${placeOn('h1', placeId, useNear, radiusM)}
           )
@@ -167,11 +168,14 @@ function subjectJoinSql(hops: JoinHop[], placeId: number, useNear: boolean, radi
           SELECT 1 FROM assets h1
           WHERE h1.canonical_type = ${p1.type}
             AND h1.id <> h0.id
+            AND h1.id <> a.id
             AND ST_DWithin(h0.geom::geography, h1.geom::geography, ${p1.withinM})
             AND EXISTS (
               SELECT 1 FROM assets h2
               WHERE h2.canonical_type = ${p2.type}
                 AND h2.id <> h1.id
+                AND h2.id <> h0.id
+                AND h2.id <> a.id
                 AND ST_DWithin(h1.geom::geography, h2.geom::geography, ${p2.withinM})
                 ${placeOn('h2', placeId, useNear, radiusM)}
             )
@@ -210,13 +214,14 @@ function relatedWhere(
           WHERE s.id = ANY(${subjectIds})
             AND a.id <> s.id
             AND ST_DWithin(s.geom::geography, a.geom::geography, ${p0.withinM})
-        )
-        AND EXISTS (
-          SELECT 1 FROM assets h1
-          WHERE h1.canonical_type = ${p1.type}
-            AND h1.id <> a.id
-            AND ST_DWithin(a.geom::geography, h1.geom::geography, ${p1.withinM})
-            ${placeOn('h1', placeId, useNear, radiusM)}
+            AND EXISTS (
+              SELECT 1 FROM assets h1
+              WHERE h1.canonical_type = ${p1.type}
+                AND h1.id <> a.id
+                AND h1.id <> s.id
+                AND ST_DWithin(a.geom::geography, h1.geom::geography, ${p1.withinM})
+                ${placeOn('h1', placeId, useNear, radiusM)}
+            )
         )`
     }
     return sql`
@@ -231,6 +236,7 @@ function relatedWhere(
             SELECT 1 FROM assets s
             WHERE s.id = ANY(${subjectIds})
               AND h0.id <> s.id
+              AND a.id <> s.id
               AND ST_DWithin(s.geom::geography, h0.geom::geography, ${p0.withinM})
           )
       )`
@@ -244,18 +250,21 @@ function relatedWhere(
         WHERE s.id = ANY(${subjectIds})
           AND a.id <> s.id
           AND ST_DWithin(s.geom::geography, a.geom::geography, ${p0.withinM})
-      )
-      AND EXISTS (
-        SELECT 1 FROM assets h1
-        WHERE h1.canonical_type = ${p1.type}
-          AND h1.id <> a.id
-          AND ST_DWithin(a.geom::geography, h1.geom::geography, ${p1.withinM})
           AND EXISTS (
-            SELECT 1 FROM assets h2
-            WHERE h2.canonical_type = ${p2.type}
-              AND h2.id <> h1.id
-              AND ST_DWithin(h1.geom::geography, h2.geom::geography, ${p2.withinM})
-              ${placeOn('h2', placeId, useNear, radiusM)}
+            SELECT 1 FROM assets h1
+            WHERE h1.canonical_type = ${p1.type}
+              AND h1.id <> a.id
+              AND h1.id <> s.id
+              AND ST_DWithin(a.geom::geography, h1.geom::geography, ${p1.withinM})
+              AND EXISTS (
+                SELECT 1 FROM assets h2
+                WHERE h2.canonical_type = ${p2.type}
+                  AND h2.id <> h1.id
+                  AND h2.id <> a.id
+                  AND h2.id <> s.id
+                  AND ST_DWithin(h1.geom::geography, h2.geom::geography, ${p2.withinM})
+                  ${placeOn('h2', placeId, useNear, radiusM)}
+              )
           )
       )`
   }
@@ -271,15 +280,18 @@ function relatedWhere(
             SELECT 1 FROM assets s
             WHERE s.id = ANY(${subjectIds})
               AND h0.id <> s.id
+              AND a.id <> s.id
               AND ST_DWithin(s.geom::geography, h0.geom::geography, ${p0.withinM})
+              AND EXISTS (
+                SELECT 1 FROM assets h2
+                WHERE h2.canonical_type = ${p2.type}
+                  AND h2.id <> a.id
+                  AND h2.id <> h0.id
+                  AND h2.id <> s.id
+                  AND ST_DWithin(a.geom::geography, h2.geom::geography, ${p2.withinM})
+                  ${placeOn('h2', placeId, useNear, radiusM)}
+              )
           )
-      )
-      AND EXISTS (
-        SELECT 1 FROM assets h2
-        WHERE h2.canonical_type = ${p2.type}
-          AND h2.id <> a.id
-          AND ST_DWithin(a.geom::geography, h2.geom::geography, ${p2.withinM})
-          ${placeOn('h2', placeId, useNear, radiusM)}
       )`
   }
   return sql`
@@ -294,11 +306,14 @@ function relatedWhere(
           SELECT 1 FROM assets h0
           WHERE h0.canonical_type = ${p0.type}
             AND h1.id <> h0.id
+            AND a.id <> h0.id
             AND ST_DWithin(h0.geom::geography, h1.geom::geography, ${p1.withinM})
             AND EXISTS (
               SELECT 1 FROM assets s
               WHERE s.id = ANY(${subjectIds})
                 AND h0.id <> s.id
+                AND h1.id <> s.id
+                AND a.id <> s.id
                 AND ST_DWithin(s.geom::geography, h0.geom::geography, ${p0.withinM})
             )
         )
