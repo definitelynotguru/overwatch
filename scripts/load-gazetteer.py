@@ -170,10 +170,14 @@ def rows_from(path, kind):
 
 def sql_upsert(rows, overwrite):
     conflict = (
-        "ON CONFLICT ((lower(name))) DO UPDATE SET "
+        "ON CONFLICT ((lower(name)), kind) DO UPDATE SET "
         "aliases = EXCLUDED.aliases, kind = EXCLUDED.kind, geom = EXCLUDED.geom, bbox = EXCLUDED.bbox"
         if overwrite
-        else "ON CONFLICT ((lower(name))) DO NOTHING"
+        else (
+            "ON CONFLICT ((lower(name)), kind) DO UPDATE SET "
+            "aliases = EXCLUDED.aliases, geom = EXCLUDED.geom, bbox = EXCLUDED.bbox "
+            "WHERE ST_Area(EXCLUDED.bbox::geography) > ST_Area(places.bbox::geography)"
+        )
     )
     parts = []
     for name, aliases, kind, gjson, radius in rows:
@@ -182,15 +186,12 @@ def sql_upsert(rows, overwrite):
             "INSERT INTO places (name, aliases, kind, geom, bbox) "
             "SELECT "
             + esc(name) + ", " + esc_text_array(aliases) + ", " + esc(kind) + ", "
-            + "ST_SetSRID(ST_Centroid(g), 4326)::geography, "
+            + "ST_SetSRID(ST_PointOnSurface(g), 4326)::geography, "
             + "CASE "
-            + "WHEN ST_XMax(g) - ST_XMin(g) > 180 OR ST_GeometryType(g) IN ('ST_Point', 'ST_MultiPoint') THEN "
+            + "WHEN ST_GeometryType(g) IN ('ST_Point', 'ST_MultiPoint') THEN "
             + "ST_Envelope(ST_Buffer(ST_SetSRID(ST_Centroid(g), 4326)::geography, COALESCE("
             + radius_sql + ", 25000))::geometry) "
-            + "ELSE ST_MakeEnvelope("
-            + "ST_XMin(g), ST_YMin(g), "
-            + "GREATEST(ST_XMax(g), ST_XMin(g) + 1e-8), "
-            + "GREATEST(ST_YMax(g), ST_YMin(g) + 1e-8), 4326) "
+            + "ELSE g "
             + "END "
             + "FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON(" + esc(gjson) + "), 4326) AS g) s "
             + conflict + ";"
