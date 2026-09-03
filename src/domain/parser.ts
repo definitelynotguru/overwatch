@@ -6,7 +6,7 @@ const TYPE_PHRASES = typePhrases()
 const KEY_VALUE = /(?:^|\s)(type|operator|region|country|near|radius):(?:"([^"]*)"|([^\s]+))/gi
 const NEAR = /\bnear\s+(.+?)(?:\s+(?:in|within|radius)\b|$)/i
 const IN = /\bin\s+(.+?)(?:\s+(?:near|within|radius)\b|$)/i
-const RADIUS = /(?:within|radius)\s*[:=]?\s*(\d+)(?!\d)(?:\s*(?:km|kilometers?|kilometres?))?(?!\s+(?:km|kilometers?|kilometres?)\b)(?!\s+of\b)/i
+const RADIUS = /(?:within|radius)\s*[:=]?\s*(\d+)(?!\d)(?:\s*(?:km|kilometers?|kilometres?))?(?!\s+(?:km|kilometers?|kilometres?)\b)/i
 const HOP_PREFIX =
   /\bwithin\s*[:=]?\s*(\d+)\s*(?:km|kilometers?|kilometres?)?\s+of\s+/i
 const STOP = /\b(the|a|an|all|show|find|search|get|list|of|for)\b/gi
@@ -64,6 +64,27 @@ function extractHops(text: string): { hops: JoinHop[]; rest: string } {
   return { hops, rest }
 }
 
+function stripLeftoverTypeHops(text: string): string {
+  let rest = text
+  let searchFrom = 0
+  while (true) {
+    const slice = rest.slice(searchFrom)
+    const m = slice.match(HOP_PREFIX)
+    if (!m || m.index == null) break
+    const absIndex = searchFrom + m.index
+    const afterOf = rest.slice(absIndex + m[0].length)
+    const hopType = matchHopType(afterOf)
+    if (!hopType) {
+      searchFrom = absIndex + m[0].length
+      continue
+    }
+    const hopEnd = absIndex + m[0].length + hopType.consumed
+    rest = `${rest.slice(0, absIndex)} ${rest.slice(hopEnd)}`.replace(/\s+/g, ' ').trim()
+    searchFrom = Math.min(absIndex, rest.length)
+  }
+  return rest
+}
+
 export function parseQuery(input: string): ParsedQuery {
   const raw = input.trim()
   const result: ParsedQuery = {
@@ -101,7 +122,7 @@ export function parseQuery(input: string): ParsedQuery {
 
   const extracted = extractHops(rest)
   result.hops = extracted.hops
-  rest = extracted.rest
+  rest = stripLeftoverTypeHops(extracted.rest)
 
   if (!result.type) {
     const lower = rest.toLowerCase()
@@ -119,6 +140,15 @@ export function parseQuery(input: string): ParsedQuery {
     result.operator = resolveOperator(rest) ?? resolveOperator(raw)
   }
 
+  if (!result.near) {
+    const nearHit = rest.match(NEAR) ?? raw.match(NEAR)
+    if (nearHit) result.near = cleanPlace(nearHit[1] ?? '') || null
+  }
+  if (!result.region && !result.country) {
+    const inHit = rest.match(IN) ?? raw.match(IN)
+    if (inHit) result.region = cleanPlace(inHit[1] ?? '') || null
+  }
+
   const radiusHit = rest.match(RADIUS) ?? (result.hops.length === 0 ? raw.match(RADIUS) : null)
   if (radiusHit) {
     if (!structuredRadius) {
@@ -128,13 +158,9 @@ export function parseQuery(input: string): ParsedQuery {
     rest = rest.replace(radiusHit[0], ' ')
   }
 
-  if (!result.near) {
-    const nearHit = rest.match(NEAR) ?? raw.match(NEAR)
-    if (nearHit) result.near = cleanPlace(nearHit[1] ?? '') || null
-  }
-  if (!result.region && !result.country) {
-    const inHit = rest.match(IN) ?? raw.match(IN)
-    if (inHit) result.region = cleanPlace(inHit[1] ?? '') || null
+  if (!result.near && !result.region && !result.country) {
+    const ofHit = rest.match(/\bof\s+(.+)/i)
+    if (ofHit) result.near = cleanPlace(ofHit[1] ?? '') || null
   }
 
   return result

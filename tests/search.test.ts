@@ -675,4 +675,139 @@ describe('searchAssets — spatial join hops', () => {
       await sql`DELETE FROM assets WHERE osm_id = 9290010006`
     }
   })
+
+  it('finds the Thames pipeline within 30 km of airports in england', async () => {
+    try {
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'England',
+          ARRAY['england uk']::text[],
+          'region',
+          ST_SetSRID(ST_MakePoint(-1.5, 52.5), 4326)::geography,
+          ST_MakeEnvelope(-6, 49.8, 2, 56, 4326)
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          aliases = EXCLUDED.aliases,
+          kind = EXCLUDED.kind,
+          geom = EXCLUDED.geom,
+          bbox = EXCLUDED.bbox
+      `
+      const [place] = await sql<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM places
+        WHERE lower(name) = 'england' AND kind = 'region'
+      `
+      expect(Number(place.n)).toBe(1)
+
+      const out = await searchAssets('pipelines within 30 km of airports in england')
+      expect(isSearchError(out)).toBe(false)
+      if (isSearchError(out)) return
+      expect(out.query.hops).toEqual([{ type: 'airport', withinM: 30000 }])
+      expect(out.query.near).toBeNull()
+      expect(out.query.region).toMatch(/england/i)
+      const pipe = out.results.find((a) => a.name?.includes('Thames'))
+      expect(pipe).toBeTruthy()
+      expect(out.related).toHaveLength(1)
+      expect(out.related[0]!.type).toBe('airport')
+      expect(out.related[0]!.assets.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      await sql`DELETE FROM places WHERE lower(name) = 'england'`
+    }
+  })
+
+  it('runs a three-hop EXISTS over a tiny A-B-C-D chain', async () => {
+    try {
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'Hopchain',
+          ARRAY['hopchain test']::text[],
+          'region',
+          ST_SetSRID(ST_MakePoint(10.02, 10.0), 4326)::geography,
+          ST_MakeEnvelope(9.9, 9.9, 10.1, 10.1, 4326)
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          aliases = EXCLUDED.aliases,
+          kind = EXCLUDED.kind,
+          geom = EXCLUDED.geom,
+          bbox = EXCLUDED.bbox
+      `
+      await sql`
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, geom, tags) VALUES
+          ('node', 9290010101, 'Hopchain Warehouse', 'warehouse',
+            ST_SetSRID(ST_MakePoint(10.00, 10.0), 4326), '{}'::jsonb),
+          ('node', 9290010102, 'Hopchain Data Center', 'data_center',
+            ST_SetSRID(ST_MakePoint(10.01, 10.0), 4326), '{}'::jsonb),
+          ('node', 9290010103, 'Hopchain Substation', 'substation',
+            ST_SetSRID(ST_MakePoint(10.02, 10.0), 4326), '{}'::jsonb),
+          ('node', 9290010104, 'Hopchain Port', 'port',
+            ST_SetSRID(ST_MakePoint(10.03, 10.0), 4326), '{}'::jsonb)
+        ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+          name = EXCLUDED.name,
+          canonical_type = EXCLUDED.canonical_type,
+          geom = EXCLUDED.geom,
+          tags = EXCLUDED.tags
+      `
+      const out = await searchAssets(
+        'warehouses within 5 km of data centers within 5 km of substations within 5 km of ports in hopchain',
+      )
+      expect(isSearchError(out)).toBe(false)
+      if (isSearchError(out)) return
+      expect(out.query.hops.map((h) => h.type)).toEqual(['data_center', 'substation', 'port'])
+      expect(out.results.some((a) => a.osmId === 9290010101)).toBe(true)
+      expect(out.results.every((a) => a.type === 'warehouse')).toBe(true)
+      expect(out.related).toHaveLength(3)
+      expect(out.related[0]!.type).toBe('data_center')
+      expect(out.related[1]!.type).toBe('substation')
+      expect(out.related[2]!.type).toBe('port')
+      expect(out.related[0]!.assets.length).toBeGreaterThanOrEqual(1)
+      expect(out.related[1]!.assets.length).toBeGreaterThanOrEqual(1)
+      expect(out.related[2]!.assets.length).toBeGreaterThanOrEqual(1)
+      expect(out.related[0]!.assets.some((a) => a.osmId === 9290010102)).toBe(true)
+      expect(out.related[1]!.assets.some((a) => a.osmId === 9290010103)).toBe(true)
+      expect(out.related[2]!.assets.some((a) => a.osmId === 9290010104)).toBe(true)
+    } finally {
+      await sql`DELETE FROM assets WHERE osm_id IN (9290010101, 9290010102, 9290010103, 9290010104)`
+      await sql`DELETE FROM places WHERE lower(name) = 'hopchain'`
+    }
+  })
+
+  it('does not let a lone airport join to itself through a nearby link type', async () => {
+    try {
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'SelfJoinland',
+          ARRAY['selfjoinland test']::text[],
+          'region',
+          ST_SetSRID(ST_MakePoint(20.0, 20.0), 4326)::geography,
+          ST_MakeEnvelope(19.9, 19.9, 20.1, 20.1, 4326)
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          aliases = EXCLUDED.aliases,
+          kind = EXCLUDED.kind,
+          geom = EXCLUDED.geom,
+          bbox = EXCLUDED.bbox
+      `
+      await sql`
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, geom, tags) VALUES
+          ('node', 9290010105, 'SelfJoin Airport', 'airport',
+            ST_SetSRID(ST_MakePoint(20.0, 20.0), 4326), '{}'::jsonb),
+          ('node', 9290010106, 'SelfJoin Warehouse', 'warehouse',
+            ST_SetSRID(ST_MakePoint(20.005, 20.0), 4326), '{}'::jsonb)
+        ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+          name = EXCLUDED.name,
+          canonical_type = EXCLUDED.canonical_type,
+          geom = EXCLUDED.geom,
+          tags = EXCLUDED.tags
+      `
+      const out = await searchAssets(
+        'airports within 10 km of warehouses within 10 km of airports in selfjoinland',
+      )
+      expect(isSearchError(out)).toBe(false)
+      if (isSearchError(out)) return
+      expect(out.results.some((a) => a.osmId === 9290010105)).toBe(false)
+      expect(out.stats.total).toBe(0)
+    } finally {
+      await sql`DELETE FROM assets WHERE osm_id IN (9290010105, 9290010106)`
+      await sql`DELETE FROM places WHERE lower(name) = 'selfjoinland'`
+    }
+  })
 })

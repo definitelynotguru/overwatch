@@ -241,4 +241,22 @@ describe('parseQuery — join hops', () => {
     const high = parseQuery('pipelines within 900 km of airports near london')
     expect(high.hops).toEqual([{ type: 'airport', withinM: 500000 }])
   })
+
+  it('treats within 20 km of london as place radius, not a hop', () => {
+    const q = parseQuery('airports within 20 km of london')
+    expect(q.type).toBe('airport')
+    expect(q.hops).toEqual([])
+    expect(q.radius).toBe(20)
+    expect(q.near).toBe('london')
+    expect(q.region).toBeNull()
+  })
+
+  it('keeps structured operator when a hop is stripped', () => {
+    const q = parseQuery('operator:airtel pipelines within 20 km of airports in karnataka')
+    expect(q.operator).toBe('airtel')
+    expect(q.type).toBe('pipeline')
+    expect(q.hops).toEqual([{ type: 'airport', withinM: 20000 }])
+    expect(q.region).toBe('karnataka')
+    expect(q.radius).toBe(50)
+  })
 })
