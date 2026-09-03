@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS assets (
   canonical_type  text NOT NULL,
   operator        text,
   geom            geometry(Geometry, 4326) NOT NULL,
-  centroid        geography(Point, 4326) GENERATED ALWAYS AS (ST_SetSRID(ST_Centroid(geom), 4326)::geography) STORED,
+  centroid        geography(Point, 4326) GENERATED ALWAYS AS (ST_Centroid(geom::geography)) STORED,
   bbox            geometry(Polygon, 4326) GENERATED ALWAYS AS (overwatch_asset_bbox(geom)) STORED,
   tags            jsonb NOT NULL DEFAULT '{}'::jsonb,
   UNIQUE (osm_type, osm_id)

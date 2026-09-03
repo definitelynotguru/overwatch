@@ -32,22 +32,28 @@ BEGIN
   END IF;
 END $$;
 
+-- places.bbox must hold real MultiPolygons, not dateline-broken envelopes.
+-- Skip ALTER when already geometry(Geometry,4326) so reruns do not rewrite the column.
 DO $$
+DECLARE
+  bbox_type text;
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'assets' AND column_name = 'centroid'
-  ) THEN
-    ALTER TABLE assets
-      ADD COLUMN centroid geography(Point, 4326)
-      GENERATED ALWAYS AS (ST_SetSRID(ST_Centroid(geom), 4326)::geography) STORED;
+  SELECT format_type(a.atttypid, a.atttypmod)
+    INTO bbox_type
+  FROM pg_attribute a
+  JOIN pg_class c ON c.oid = a.attrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public'
+    AND c.relname = 'places'
+    AND a.attname = 'bbox'
+    AND NOT a.attisdropped;
+
+  IF replace(coalesce(bbox_type, ''), ' ', '') IS DISTINCT FROM 'geometry(Geometry,4326)' THEN
+    ALTER TABLE places
+      ALTER COLUMN bbox TYPE geometry(Geometry, 4326)
+      USING bbox;
   END IF;
 END $$;
-
--- places.bbox must hold real MultiPolygons, not dateline-broken envelopes.
-ALTER TABLE places
-  ALTER COLUMN bbox TYPE geometry(Geometry, 4326)
-  USING bbox;
 
 DROP INDEX IF EXISTS places_name_lower_uidx;
 CREATE UNIQUE INDEX IF NOT EXISTS places_name_kind_lower_uidx ON places (lower(name), kind);
@@ -78,6 +84,42 @@ AS $$
   END
   FROM (SELECT ST_Centroid(g::geography)::geometry AS c) s;
 $$;
+
+-- Generated centroid: CREATE OR REPLACE is not enough. Recreate only when the
+-- expression is not already ST_Centroid(geom::geography).
+DO $$
+DECLARE
+  centroid_expr text;
+  compact text;
+BEGIN
+  SELECT pg_get_expr(d.adbin, d.adrelid)
+    INTO centroid_expr
+  FROM pg_attrdef d
+  JOIN pg_attribute a ON a.attrelid = d.adrelid AND a.attnum = d.adnum
+  JOIN pg_class c ON c.oid = d.adrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public'
+    AND c.relname = 'assets'
+    AND a.attname = 'centroid';
+
+  compact := replace(lower(coalesce(centroid_expr, '')), ' ', '');
+  IF centroid_expr IS NOT NULL
+     AND position('geom::geography' in compact) = 0
+     AND position('geom)::geography' in compact) = 0 THEN
+    DROP INDEX IF EXISTS assets_centroid_gix;
+    ALTER TABLE assets DROP COLUMN centroid;
+    centroid_expr := NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'assets' AND column_name = 'centroid'
+  ) THEN
+    ALTER TABLE assets
+      ADD COLUMN centroid geography(Point, 4326)
+      GENERATED ALWAYS AS (ST_Centroid(geom::geography)) STORED;
+  END IF;
+END $$;
 
 DO $$
 DECLARE

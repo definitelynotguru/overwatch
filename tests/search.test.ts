@@ -379,14 +379,45 @@ describe('searchAssets', () => {
           geom = EXCLUDED.geom,
           tags = EXCLUDED.tags
       `
-      const [row] = await sql<{ span: number }[]>`
-        SELECT ST_XMax(bbox) - ST_XMin(bbox) AS span
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'DatelinePin',
+          ARRAY['dateline pin']::text[],
+          'city',
+          ST_SetSRID(ST_MakePoint(180, 0), 4326)::geography,
+          ST_MakeEnvelope(178, -1, 180, 1, 4326)
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          aliases = EXCLUDED.aliases,
+          kind = EXCLUDED.kind,
+          geom = EXCLUDED.geom,
+          bbox = EXCLUDED.bbox
+      `
+      const [row] = await sql<{ span: number; xmid: number; ymid: number; lat: number; lon: number }[]>`
+        SELECT
+          ST_XMax(bbox) - ST_XMin(bbox) AS span,
+          (ST_XMin(bbox) + ST_XMax(bbox)) / 2 AS xmid,
+          (ST_YMin(bbox) + ST_YMax(bbox)) / 2 AS ymid,
+          ST_Y(centroid::geometry) AS lat,
+          ST_X(centroid::geometry) AS lon
         FROM assets
         WHERE osm_id = 9290010003
       `
-      expect(Number(row.span)).toBeLessThan(1)
+      expect(Number(row.span)).toBeLessThan(0.01)
+      expect(Math.abs(Number(row.xmid))).toBeGreaterThan(170)
+      expect(Math.abs(Number(row.ymid))).toBeCloseTo(0, 5)
+      expect(Math.abs(Number(row.lon))).toBeGreaterThan(170)
+      expect(Math.abs(Number(row.lat))).toBeCloseTo(0, 5)
+
+      const out = await searchAssets('pipelines near datelinepin')
+      expect(isSearchError(out)).toBe(false)
+      if (isSearchError(out)) return
+      expect(out.results.some((a) => a.osmId === 9290010003)).toBe(true)
+      expect(out.bounds).toBeTruthy()
+      expect(out.bounds![2] - out.bounds![0]).toBeLessThan(2)
     } finally {
       await sql`DELETE FROM assets WHERE osm_id = 9290010003`
+      await sql`DELETE FROM places WHERE lower(name) = 'datelinepin'`
     }
   })
 
@@ -451,8 +482,103 @@ describe('searchAssets', () => {
         WHERE lower(name) = 'washland' AND kind = 'region'
       `
       expect(Number(row.xmax)).toBeGreaterThanOrEqual(20)
+
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'Washland',
+          ARRAY['washland test']::text[],
+          'region',
+          ST_SetSRID(ST_MakePoint(0.05, 0.05), 4326)::geography,
+          ST_MakeEnvelope(0, 0, 0.1, 0.1, 4326)
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          bbox = EXCLUDED.bbox
+          WHERE ST_Area(EXCLUDED.bbox::geography) > ST_Area(places.bbox::geography)
+      `
+      const [kept] = await sql<{ xmax: number }[]>`
+        SELECT ST_XMax(bbox) AS xmax
+        FROM places
+        WHERE lower(name) = 'washland' AND kind = 'region'
+      `
+      expect(Number(kept.xmax)).toBeGreaterThanOrEqual(20)
     } finally {
       await sql`DELETE FROM places WHERE lower(name) = 'washland'`
+    }
+  })
+
+  it('stores a tiny polygon bbox for a point asset', async () => {
+    try {
+      await sql`
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, geom, tags) VALUES (
+          'node',
+          9290010006,
+          'Point Bbox Pin',
+          'airport',
+          ST_SetSRID(ST_MakePoint(-0.1, 51.5), 4326),
+          '{}'::jsonb
+        )
+        ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+          name = EXCLUDED.name,
+          canonical_type = EXCLUDED.canonical_type,
+          geom = EXCLUDED.geom,
+          tags = EXCLUDED.tags
+      `
+      const [row] = await sql<{ gtype: string; xspan: number; yspan: number }[]>`
+        SELECT
+          GeometryType(bbox) AS gtype,
+          ST_XMax(bbox) - ST_XMin(bbox) AS xspan,
+          ST_YMax(bbox) - ST_YMin(bbox) AS yspan
+        FROM assets
+        WHERE osm_id = 9290010006
+      `
+      expect(['POLYGON', 'ST_Polygon']).toContain(row.gtype)
+      expect(Number(row.xspan)).toBeGreaterThan(0)
+      expect(Number(row.xspan)).toBeLessThan(1e-6)
+      expect(Number(row.yspan)).toBeGreaterThan(0)
+      expect(Number(row.yspan)).toBeLessThan(1e-6)
+    } finally {
+      await sql`DELETE FROM assets WHERE osm_id = 9290010006`
+    }
+  })
+
+  it('overwrite upsert replaces a larger bbox with a smaller one', async () => {
+    try {
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'Overwriteland',
+          ARRAY['overwriteland test']::text[],
+          'country',
+          ST_SetSRID(ST_MakePoint(0, 0), 4326)::geography,
+          ST_MakeEnvelope(-10, -10, 20, 15, 4326)
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          aliases = EXCLUDED.aliases,
+          kind = EXCLUDED.kind,
+          geom = EXCLUDED.geom,
+          bbox = EXCLUDED.bbox
+      `
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'Overwriteland',
+          ARRAY['overwriteland test']::text[],
+          'country',
+          ST_SetSRID(ST_MakePoint(0.05, 0.05), 4326)::geography,
+          ST_MakeEnvelope(0, 0, 0.1, 0.1, 4326)
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          aliases = EXCLUDED.aliases,
+          kind = EXCLUDED.kind,
+          geom = EXCLUDED.geom,
+          bbox = EXCLUDED.bbox
+      `
+      const [row] = await sql<{ xmax: number }[]>`
+        SELECT ST_XMax(bbox) AS xmax
+        FROM places
+        WHERE lower(name) = 'overwriteland' AND kind = 'country'
+      `
+      expect(Number(row.xmax)).toBeCloseTo(0.1, 6)
+    } finally {
+      await sql`DELETE FROM places WHERE lower(name) = 'overwriteland'`
     }
   })
 })
