@@ -134,6 +134,7 @@ function subjectJoinSql(hops: JoinHop[], placeId: number, useNear: boolean, radi
       AND EXISTS (
         SELECT 1 FROM assets h0
         WHERE h0.canonical_type = ${p0.type}
+          AND h0.id <> a.id
           AND ST_DWithin(a.geom::geography, h0.geom::geography, ${p0.withinM})
           ${placeOn('h0', placeId, useNear, radiusM)}
       )`
@@ -144,10 +145,12 @@ function subjectJoinSql(hops: JoinHop[], placeId: number, useNear: boolean, radi
       AND EXISTS (
         SELECT 1 FROM assets h0
         WHERE h0.canonical_type = ${p0.type}
+          AND h0.id <> a.id
           AND ST_DWithin(a.geom::geography, h0.geom::geography, ${p0.withinM})
           AND EXISTS (
             SELECT 1 FROM assets h1
             WHERE h1.canonical_type = ${p1.type}
+              AND h1.id <> h0.id
               AND ST_DWithin(h0.geom::geography, h1.geom::geography, ${p1.withinM})
               ${placeOn('h1', placeId, useNear, radiusM)}
           )
@@ -158,14 +161,17 @@ function subjectJoinSql(hops: JoinHop[], placeId: number, useNear: boolean, radi
     AND EXISTS (
       SELECT 1 FROM assets h0
       WHERE h0.canonical_type = ${p0.type}
+        AND h0.id <> a.id
         AND ST_DWithin(a.geom::geography, h0.geom::geography, ${p0.withinM})
         AND EXISTS (
           SELECT 1 FROM assets h1
           WHERE h1.canonical_type = ${p1.type}
+            AND h1.id <> h0.id
             AND ST_DWithin(h0.geom::geography, h1.geom::geography, ${p1.withinM})
             AND EXISTS (
               SELECT 1 FROM assets h2
               WHERE h2.canonical_type = ${p2.type}
+                AND h2.id <> h1.id
                 AND ST_DWithin(h1.geom::geography, h2.geom::geography, ${p2.withinM})
                 ${placeOn('h2', placeId, useNear, radiusM)}
             )
@@ -189,6 +195,7 @@ function relatedWhere(
       AND EXISTS (
         SELECT 1 FROM assets s
         WHERE s.id = ANY(${subjectIds})
+          AND a.id <> s.id
           AND ST_DWithin(s.geom::geography, a.geom::geography, ${p0.withinM})
       )
       ${placeOn('a', placeId, useNear, radiusM)}`
@@ -201,11 +208,13 @@ function relatedWhere(
         AND EXISTS (
           SELECT 1 FROM assets s
           WHERE s.id = ANY(${subjectIds})
+            AND a.id <> s.id
             AND ST_DWithin(s.geom::geography, a.geom::geography, ${p0.withinM})
         )
         AND EXISTS (
           SELECT 1 FROM assets h1
           WHERE h1.canonical_type = ${p1.type}
+            AND h1.id <> a.id
             AND ST_DWithin(a.geom::geography, h1.geom::geography, ${p1.withinM})
             ${placeOn('h1', placeId, useNear, radiusM)}
         )`
@@ -216,10 +225,12 @@ function relatedWhere(
       AND EXISTS (
         SELECT 1 FROM assets h0
         WHERE h0.canonical_type = ${p0.type}
+          AND a.id <> h0.id
           AND ST_DWithin(h0.geom::geography, a.geom::geography, ${p1.withinM})
           AND EXISTS (
             SELECT 1 FROM assets s
             WHERE s.id = ANY(${subjectIds})
+              AND h0.id <> s.id
               AND ST_DWithin(s.geom::geography, h0.geom::geography, ${p0.withinM})
           )
       )`
@@ -231,15 +242,18 @@ function relatedWhere(
       AND EXISTS (
         SELECT 1 FROM assets s
         WHERE s.id = ANY(${subjectIds})
+          AND a.id <> s.id
           AND ST_DWithin(s.geom::geography, a.geom::geography, ${p0.withinM})
       )
       AND EXISTS (
         SELECT 1 FROM assets h1
         WHERE h1.canonical_type = ${p1.type}
+          AND h1.id <> a.id
           AND ST_DWithin(a.geom::geography, h1.geom::geography, ${p1.withinM})
           AND EXISTS (
             SELECT 1 FROM assets h2
             WHERE h2.canonical_type = ${p2.type}
+              AND h2.id <> h1.id
               AND ST_DWithin(h1.geom::geography, h2.geom::geography, ${p2.withinM})
               ${placeOn('h2', placeId, useNear, radiusM)}
           )
@@ -251,16 +265,19 @@ function relatedWhere(
       AND EXISTS (
         SELECT 1 FROM assets h0
         WHERE h0.canonical_type = ${p0.type}
+          AND a.id <> h0.id
           AND ST_DWithin(h0.geom::geography, a.geom::geography, ${p1.withinM})
           AND EXISTS (
             SELECT 1 FROM assets s
             WHERE s.id = ANY(${subjectIds})
+              AND h0.id <> s.id
               AND ST_DWithin(s.geom::geography, h0.geom::geography, ${p0.withinM})
           )
       )
       AND EXISTS (
         SELECT 1 FROM assets h2
         WHERE h2.canonical_type = ${p2.type}
+          AND h2.id <> a.id
           AND ST_DWithin(a.geom::geography, h2.geom::geography, ${p2.withinM})
           ${placeOn('h2', placeId, useNear, radiusM)}
       )`
@@ -271,14 +288,17 @@ function relatedWhere(
     AND EXISTS (
       SELECT 1 FROM assets h1
       WHERE h1.canonical_type = ${p1.type}
+        AND a.id <> h1.id
         AND ST_DWithin(h1.geom::geography, a.geom::geography, ${p2.withinM})
         AND EXISTS (
           SELECT 1 FROM assets h0
           WHERE h0.canonical_type = ${p0.type}
+            AND h1.id <> h0.id
             AND ST_DWithin(h0.geom::geography, h1.geom::geography, ${p1.withinM})
             AND EXISTS (
               SELECT 1 FROM assets s
               WHERE s.id = ANY(${subjectIds})
+                AND h0.id <> s.id
                 AND ST_DWithin(s.geom::geography, h0.geom::geography, ${p0.withinM})
             )
         )
@@ -294,10 +314,10 @@ function foldBounds(rowSets: AssetRow[][]): [number, number, number, number] | n
   for (const rows of rowSets) {
     for (const row of rows) {
       any = true
-      minLon = Math.min(minLon, Number(row.xmin), Number(row.lon))
-      minLat = Math.min(minLat, Number(row.ymin), Number(row.lat))
-      maxLon = Math.max(maxLon, Number(row.xmax), Number(row.lon))
-      maxLat = Math.max(maxLat, Number(row.ymax), Number(row.lat))
+      minLon = Math.min(minLon, Number(row.xmin))
+      minLat = Math.min(minLat, Number(row.ymin))
+      maxLon = Math.max(maxLon, Number(row.xmax))
+      maxLat = Math.max(maxLat, Number(row.ymax))
     }
   }
   if (!any) return null
@@ -485,8 +505,7 @@ export async function searchAssets(q: string): Promise<SearchResult | SearchErro
     radiusM,
   )
 
-  const bounds =
-    hops.length > 0 ? foldBounds([rows, ...relatedRows]) : foldBounds([rows])
+  const bounds = foldBounds([rows, ...relatedRows])
 
   return {
     results: rows.map(toAsset),

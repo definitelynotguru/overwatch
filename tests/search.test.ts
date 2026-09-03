@@ -627,5 +627,52 @@ describe('searchAssets — spatial join hops', () => {
     if (isSearchError(out)) return
     expect(out.results).toEqual([])
     expect(out.stats.total).toBe(0)
+    expect(out.related).toEqual([{ type: 'telecom', withinM: 1000, assets: [] }])
+    expect(out.bounds).toBeNull()
+  })
+
+  it('finds industrial within 20 km of pipelines within 50 km of airports near london', async () => {
+    const out = await searchAssets(
+      'industrial within 20 km of pipelines within 50 km of airports near london',
+    )
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    const poly = out.results.find((a) => a.name?.includes('Isle of Dogs'))
+    expect(poly).toBeTruthy()
+    expect(poly!.geometry?.type).toBe('Polygon')
+    expect(out.related).toHaveLength(2)
+    expect(out.related[0]!.type).toBe('pipeline')
+    const pipe = out.related[0]!.assets.find((a) => a.name?.includes('Thames'))
+    expect(pipe).toBeTruthy()
+    expect(pipe!.geometry?.type).toBe('LineString')
+    expect(out.related[1]!.type).toBe('airport')
+    expect(out.related[1]!.assets.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('does not self-match same-type joins', async () => {
+    try {
+      await sql`
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, geom, tags) VALUES (
+          'node',
+          9290010006,
+          'Test Texas Airport',
+          'airport',
+          ST_SetSRID(ST_MakePoint(-99.0, 32.0), 4326),
+          '{}'::jsonb
+        )
+        ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+          name = EXCLUDED.name,
+          canonical_type = EXCLUDED.canonical_type,
+          geom = EXCLUDED.geom,
+          tags = EXCLUDED.tags
+      `
+      const out = await searchAssets('airports within 10 km of airports in texas')
+      expect(isSearchError(out)).toBe(false)
+      if (isSearchError(out)) return
+      expect(out.results).toEqual([])
+      expect(out.stats.total).toBe(0)
+    } finally {
+      await sql`DELETE FROM assets WHERE osm_id = 9290010006`
+    }
   })
 })
