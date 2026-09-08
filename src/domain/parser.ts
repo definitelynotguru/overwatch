@@ -3,7 +3,7 @@ import type { JoinHop, ParsedQuery } from './types'
 
 const TYPE_PHRASES = typePhrases()
 
-const KEY_VALUE = /(?:^|\s)(type|operator|region|country|near|radius):(?:"([^"]*)"|([^\s]+))/gi
+const KEY_VALUE = /(?:^|\s)(type|operator|region|country|near|radius|within):(?:"([^"]*)"|([^\s]+))/gi
 const NEAR = /\bnear\s+(.+?)(?:\s+(?:in|within|radius)\b|$)/i
 const IN = /\bin\s+(.+?)(?:\s+(?:near|within|radius)\b|$)/i
 const RADIUS = /(?:within|radius)\s*[:=]?\s*(\d+)(?!\d)(?:\s*(?:km|kilometers?|kilometres?))?(?!\s+(?:km|kilometers?|kilometres?)\b)/i
@@ -103,7 +103,8 @@ export function parseQuery(input: string): ParsedQuery {
   let structuredRadius = false
   for (const match of raw.matchAll(KEY_VALUE)) {
     const key = match[1]!.toLowerCase()
-    const val = (match[2] ?? match[3] ?? '').replace(/_/g, ' ')
+    const rawVal = match[2] ?? match[3] ?? ''
+    const val = rawVal.replace(/_/g, ' ')
     if (key === 'type') result.type = resolveType(val)
     else if (key === 'operator') result.operator = val.toLowerCase()
     else if (key === 'region') result.region = val
@@ -115,13 +116,26 @@ export function parseQuery(input: string): ParsedQuery {
         result.radius = Math.min(Math.max(n, 1), 500)
         structuredRadius = true
       }
+    } else if (key === 'within') {
+      const hopParts = rawVal.match(/^(.+):(\d+)$/)
+      if (hopParts && result.hops.length < MAX_HOPS) {
+        const resolved = resolveType(hopParts[1]!.replace(/_/g, ' '))
+        if (resolved) {
+          const n = parseInt(hopParts[2]!, 10)
+          const km = Number.isFinite(n) ? Math.min(Math.max(n, 1), 500) : 50
+          result.hops.push({ type: resolved, withinM: km * 1000 })
+        }
+      }
     }
     rest = rest.replace(match[0]!, ' ')
   }
   rest = rest.replace(/\s+/g, ' ').trim()
 
   const extracted = extractHops(rest)
-  result.hops = extracted.hops
+  for (const hop of extracted.hops) {
+    if (result.hops.length >= MAX_HOPS) break
+    result.hops.push(hop)
+  }
   rest = stripLeftoverTypeHops(extracted.rest)
 
   if (!result.type) {

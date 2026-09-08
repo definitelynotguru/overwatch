@@ -260,3 +260,89 @@ describe('parseQuery — join hops', () => {
     expect(q.radius).toBe(50)
   })
 })
+
+describe('parseQuery — structured join hops', () => {
+  it('parses within:airport:20 as a hop', () => {
+    const q = parseQuery('type:pipeline near:london within:airport:20')
+    expect(q.type).toBe('pipeline')
+    expect(q.near).toBe('london')
+    expect(q.hops).toEqual([{ type: 'airport', withinM: 20000 }])
+    expect(q.radius).toBe(50)
+  })
+
+  it('resolves within:datacenter:10 alias to data_center', () => {
+    const q = parseQuery('type:warehouse near:london within:datacenter:10')
+    expect(q.hops).toEqual([{ type: 'data_center', withinM: 10000 }])
+  })
+
+  it('clamps structured hop distance 0 km to 1 km and 900 km to 500 km', () => {
+    const low = parseQuery('type:pipeline near:london within:airport:0')
+    expect(low.hops).toEqual([{ type: 'airport', withinM: 1000 }])
+    const high = parseQuery('type:pipeline near:london within:airport:900')
+    expect(high.hops).toEqual([{ type: 'airport', withinM: 500000 }])
+  })
+
+  it('caps structured hops at three', () => {
+    const q = parseQuery(
+      'type:warehouse near:london within:data_center:5 within:substation:10 within:airport:50 within:port:80',
+    )
+    expect(q.hops).toEqual([
+      { type: 'data_center', withinM: 5000 },
+      { type: 'substation', withinM: 10000 },
+      { type: 'airport', withinM: 50000 },
+    ])
+    expect(q.hops).toHaveLength(3)
+    expect(q.hops.some((h) => h.type === 'port')).toBe(false)
+    expect(q.radius).toBe(50)
+  })
+
+  it('does not treat unknown within type as a hop', () => {
+    const q = parseQuery('type:airport near:london within:notatype:20')
+    expect(q.hops).toEqual([])
+    expect(q.near).toBe('london')
+    expect(q.radius).toBe(50)
+  })
+
+  it('keeps within 20 km of london as place-radius, not a structured hop', () => {
+    const q = parseQuery('airports within 20 km of london')
+    expect(q.type).toBe('airport')
+    expect(q.hops).toEqual([])
+    expect(q.radius).toBe(20)
+    expect(q.near).toBe('london')
+  })
+
+  it('combines structured hops before NL hops', () => {
+    const q = parseQuery(
+      'type:pipeline near:london within:airport:20 within 10 km of substations',
+    )
+    expect(q.type).toBe('pipeline')
+    expect(q.hops).toEqual([
+      { type: 'airport', withinM: 20000 },
+      { type: 'substation', withinM: 10000 },
+    ])
+    expect(q.near).toBe('london')
+  })
+
+  it('prefers structured hop slots when the combined cap is hit', () => {
+    const q = parseQuery(
+      'type:warehouse near:london within:data_center:5 within:substation:10 within:airport:50 within 80 km of ports',
+    )
+    expect(q.hops).toEqual([
+      { type: 'data_center', withinM: 5000 },
+      { type: 'substation', withinM: 10000 },
+      { type: 'airport', withinM: 50000 },
+    ])
+    expect(q.hops.some((h) => h.type === 'port')).toBe(false)
+    expect(q.radius).toBe(50)
+    expect(q.near).toBe('london')
+  })
+
+  it('matches NL within 20 km of airports via within:airport:20', () => {
+    const nl = parseQuery('pipelines within 20 km of airports near london')
+    const structured = parseQuery('type:pipeline near:london within:airport:20')
+    expect(structured.hops).toEqual(nl.hops)
+    expect(structured.type).toBe(nl.type)
+    expect(structured.near).toBe(nl.near)
+  })
+})
+
