@@ -5,6 +5,7 @@ import { SearchHeader } from '../components/SearchHeader'
 import { FacetPanel } from '../components/FacetPanel'
 import { ResultList } from '../components/ResultList'
 import { isSearchError, type Asset, type RelatedAssets, type SearchError, type SearchResult } from '../domain/types'
+import { HOP_COLORS, SUBJECT_COLOR, formatWithinM, type LegendItem } from '../domain/hops'
 
 const MapPane = lazy(() => import('../components/MapPane').then((m) => ({ default: m.MapPane })))
 
@@ -65,10 +66,18 @@ function Home() {
   }, [result, typeFilter, operatorFilter])
 
   const related = result?.related ?? EMPTY_RELATED
-  const legend =
-    related.length > 0
-      ? [result?.query.type, ...related.map((r) => r.type)].filter((v): v is string => Boolean(v))
-      : []
+  const legend: LegendItem[] = []
+  if (related.length > 0) {
+    const subjectType = result?.query.type
+    if (subjectType) legend.push({ label: subjectType, color: SUBJECT_COLOR })
+    related.forEach((r, i) => {
+      const color = HOP_COLORS[i] ?? HOP_COLORS[HOP_COLORS.length - 1]!
+      legend.push({
+        label: `${r.type} · within ${formatWithinM(r.withinM)}`,
+        color,
+      })
+    })
+  }
 
   function runSearch(next: string) {
     void navigate({ search: { q: next }, replace: true })
@@ -135,6 +144,7 @@ function Home() {
           <ResultList
             total={assets.length === result.results.length ? result.stats.total : assets.length}
             assets={assets}
+            related={related}
             selectedId={selectedId}
             onSelect={(asset) => {
               setSelectedId(asset.id)
@@ -155,11 +165,6 @@ function Home() {
             onClusterChange={setCluster}
             onSelect={(id) => {
               setSelectedId(id)
-              const asset = assets.find((a) => a.id === id)
-              if (asset) {
-                const el = document.querySelector('.card.selected')
-                el?.scrollIntoView({ block: 'nearest' })
-              }
             }}
           />
           </Suspense>
