@@ -10,3 +10,9 @@ coverage
 /.nitro
 .cache
 __pycache__/
+
+# Regional OSM extracts and import intermediates (never commit)
+data/*.osm.pbf
+data/*.osm.pbf.partial
+data/*.geojson
+*.osm.pbf

@@ -622,7 +622,8 @@ describe('searchAssets — spatial join hops', () => {
   })
 
   it('returns empty subject without throwing when a join cannot match', async () => {
-    const out = await searchAssets('pipelines within 1 km of telecom near london')
+    // Berlin stays seed-thin; London densify would make a 1 km telecom join non-empty.
+    const out = await searchAssets('pipelines within 1 km of telecom near berlin')
     expect(isSearchError(out)).toBe(false)
     if (isSearchError(out)) return
     expect(out.results).toEqual([])
