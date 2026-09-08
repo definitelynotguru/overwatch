@@ -181,18 +181,28 @@ export function parseQuery(input: string): ParsedQuery {
 }
 
 export function validateQuery(parsed: ParsedQuery): { valid: boolean; error?: string } {
+  const typeKv = /(?:^|\s)type:(?:"([^"]*)"|([^\s]+))/i.exec(parsed.raw)
+  if (typeKv) {
+    const token = (typeKv[1] ?? typeKv[2] ?? '').replace(/_/g, ' ').trim()
+    if (token && !parsed.type) {
+      return {
+        valid: false,
+        error: `Unknown asset type "${token}". Use a catalog id or alias (e.g. pipeline, power_line, aerodrome).`,
+      }
+    }
+  }
   if (!parsed.type && !parsed.operator) {
     return {
       valid: false,
       error:
-        'Query must specify an asset type or operator. Try "airports near london" or "type:data_center region:mumbai".',
+        'Missing asset type or operator. Try "airports near london" or "type:pipeline near:london".',
     }
   }
   if (!parsed.region && !parsed.near && !parsed.country) {
     return {
       valid: false,
       error:
-        'Query must specify a geographic scope. Try "in karnataka", "near london", or "country:india".',
+        'Missing place. Try "in karnataka", "near london", or "country:india".',
     }
   }
   return { valid: true }

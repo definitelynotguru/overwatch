@@ -622,13 +622,13 @@ describe('searchAssets — spatial join hops', () => {
   })
 
   it('returns empty subject without throwing when a join cannot match', async () => {
-    // densified London has pipelines within 1 km of telecom; nuclear stays unmatched
-    const out = await searchAssets('pipelines within 1 km of nuclear near london')
+    // Rare types so densified London PBF data does not create accidental hits.
+    const out = await searchAssets('nuclear within 1 km of biogas near london')
     expect(isSearchError(out)).toBe(false)
     if (isSearchError(out)) return
     expect(out.results).toEqual([])
     expect(out.stats.total).toBe(0)
-    expect(out.related).toEqual([{ type: 'nuclear', withinM: 1000, assets: [] }])
+    expect(out.related).toEqual([{ type: 'biogas', withinM: 1000, assets: [] }])
     expect(out.bounds).toBeNull()
   })
 

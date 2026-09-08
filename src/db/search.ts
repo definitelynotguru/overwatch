@@ -413,7 +413,7 @@ export async function searchAssets(q: string): Promise<SearchResult | SearchErro
   const place = placeName ? await resolvePlace(placeName, preferKind) : null
   if (!place) {
     return {
-      error: `Unknown place "${placeName ?? ''}". Load the Natural Earth gazetteer or seed demo places.`,
+      error: `Unknown place "${placeName ?? ''}". No matching gazetteer entry — try another spelling, or load Natural Earth / seed demo places.`,
       code: 'unknown_place',
       query,
     }
