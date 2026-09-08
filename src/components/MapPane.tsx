@@ -3,11 +3,10 @@ import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { Feature, FeatureCollection, Geometry, Point } from 'geojson'
 import type { Asset, AssetGeometry, RelatedAssets } from '../domain/types'
+import { HOP_COLORS, type LegendItem } from '../domain/hops'
 
 const OPENFREEMAP_STYLE = 'https://tiles.openfreemap.org/styles/dark'
 const FALLBACK_STYLE = 'https://demotiles.maplibre.org/style.json'
-
-const HOP_COLORS = ['#f59e0b', '#34d399', '#a78bfa'] as const
 
 type Props = {
   assets: Asset[]
@@ -17,7 +16,7 @@ type Props = {
   flyTo: Asset | null
   onSelect: (id: string) => void
   onClusterChange: (cluster: boolean) => void
-  legend?: string[]
+  legend?: LegendItem[]
 }
 
 function centroidPoint(a: Asset): Point {
@@ -447,7 +446,16 @@ export function MapPane({
   return (
     <div className="map-pane">
       <div className="map-root" ref={host} />
-      {legend && legend.length > 0 ? <div className="map-legend">{legend.join(' · ')}</div> : null}
+      {legend && legend.length > 0 ? (
+        <div className="map-legend">
+          {legend.map((item) => (
+            <div className="map-legend-item" key={item.label + item.color}>
+              <span className="map-legend-swatch" style={{ background: item.color }} />
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <label className="map-cluster-toggle">
         <input
           type="checkbox"

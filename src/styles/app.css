@@ -284,4 +284,35 @@ body {
   border-radius: 4px;
   padding: 6px 8px;
   font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 260px;
+}
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.map-legend-swatch,
+.hop-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px #0006;
+}
+.hop-group { border-top: 1px solid var(--border); }
+.hop-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  color: var(--muted);
+  font-size: 12px;
+  background: #141414;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 37px;
+  z-index: 1;
 }
