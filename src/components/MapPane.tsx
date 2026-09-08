@@ -11,6 +11,8 @@ const FALLBACK_STYLE = 'https://demotiles.maplibre.org/style.json'
 type Props = {
   assets: Asset[]
   related?: RelatedAssets[]
+  /** Server foldBounds over subject + related; preferred for camera fit. */
+  bounds?: [number, number, number, number] | null
   cluster: boolean
   selectedId: string | null
   flyTo: Asset | null
@@ -245,9 +247,34 @@ function applyHits(map: maplibregl.Map, assets: Asset[], cluster: boolean, relat
 
 const EMPTY_RELATED: RelatedAssets[] = []
 
+function fitCamera(
+  map: maplibregl.Map,
+  assets: Asset[],
+  related: RelatedAssets[],
+  apiBounds: [number, number, number, number] | null,
+) {
+  if (apiBounds) {
+    map.fitBounds(
+      [
+        [apiBounds[0], apiBounds[1]],
+        [apiBounds[2], apiBounds[3]],
+      ],
+      { padding: 48, maxZoom: 11, duration: 600 },
+    )
+    return
+  }
+  const extras = related.flatMap((r) => r.assets)
+  if (assets.length === 0 && extras.length === 0) return
+  const bounds = new maplibregl.LngLatBounds()
+  for (const a of assets) extendGeometry(bounds, a.geometry, a.lat, a.lon)
+  for (const a of extras) extendGeometry(bounds, a.geometry, a.lat, a.lon)
+  map.fitBounds(bounds, { padding: 48, maxZoom: 11, duration: 600 })
+}
+
 export function MapPane({
   assets,
   related = EMPTY_RELATED,
+  bounds: boundsProp = null,
   cluster,
   selectedId,
   flyTo,
@@ -263,6 +290,8 @@ export function MapPane({
   assetsRef.current = assets
   const relatedRef = useRef(related)
   relatedRef.current = related
+  const boundsRef = useRef(boundsProp)
+  boundsRef.current = boundsProp
   const clusterRef = useRef(cluster)
   clusterRef.current = cluster
 
@@ -286,6 +315,7 @@ export function MapPane({
 
     const onLoad = () => {
       applyHits(map, assetsRef.current, clusterRef.current, relatedRef.current)
+      fitCamera(map, assetsRef.current, relatedRef.current, boundsRef.current)
     }
     const fallback = () => {
       if (fellBack) return
@@ -367,13 +397,8 @@ export function MapPane({
     const map = mapRef.current
     if (!map) return
     applyHits(map, assets, clusterRef.current, related)
-    const extras = related.flatMap((r) => r.assets)
-    if (assets.length === 0 && extras.length === 0) return
-    const bounds = new maplibregl.LngLatBounds()
-    for (const a of assets) extendGeometry(bounds, a.geometry, a.lat, a.lon)
-    for (const a of extras) extendGeometry(bounds, a.geometry, a.lat, a.lon)
-    map.fitBounds(bounds, { padding: 48, maxZoom: 11, duration: 600 })
-  }, [assets, related])
+    fitCamera(map, assets, related, boundsProp)
+  }, [assets, related, boundsProp])
 
   useEffect(() => {
     if (!flyTo || !mapRef.current) return

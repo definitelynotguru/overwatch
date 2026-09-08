@@ -134,8 +134,20 @@ function Home() {
         {q && !query.isFetching && result && result.stats.total === 0 && (
           <section className="results">
             <div className="empty">
-              <h2>No assets matched</h2>
-              <p>Nothing in the seeded catalog for this query. Try a broader radius or another place.</p>
+              {result.query.hops.length > 0 ? (
+                <>
+                  <h2>Join found nothing</h2>
+                  <p>
+                    No subjects matched the hop chain near {result.place?.name ?? 'that place'}. Widen a
+                    within distance or try another place.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2>No assets matched</h2>
+                  <p>Nothing in the seeded catalog for this query. Try a broader radius or another place.</p>
+                </>
+              )}
             </div>
           </section>
         )}
@@ -158,6 +170,7 @@ function Home() {
           <MapPane
             assets={assets}
             related={related}
+            bounds={result?.bounds ?? null}
             legend={legend}
             cluster={cluster}
             selectedId={selectedId}
