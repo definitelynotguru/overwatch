@@ -103,6 +103,7 @@ type:airport near:london radius:50
 type:datacenter region:california
 operator:airtel region:karnataka
 operator:"Long Island Rail Road" region:"new york"
+type:pipeline near:london within:airport:20
 ```
 
 | Token | Meaning |
@@ -112,8 +113,9 @@ operator:"Long Island Rail Road" region:"new york"
 | `region` / `country` | Place name. `country` prefers a country row when resolving |
 | `near` | Place name plus radius search |
 | `radius` | Kilometers, 1-500. Default 50. Used only with `near` |
+| `within` | Join hop as `within:<type>:<km>` (e.g. `within:airport:20`). Same `JoinHop` as NL; km clamped 1-500 |
 
-`within N km of <type>` is a spatial join hop (up to 3); the place filter applies only to the innermost type.
+`within N km of <type>` (NL) and `within:<type>:<km>` (structured) are spatial join hops (up to 3 combined; structured tokens first). The place filter applies only to the innermost type. Unknown types are not hops. `within 20 km of london` remains place-radius, not a hop.
 
 You need a type or an operator, and you need a place. Missing either returns `invalid_query`. A place missing from the places table returns `unknown_place`.
 
