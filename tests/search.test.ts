@@ -610,6 +610,63 @@ describe('searchAssets — spatial join hops', () => {
     expect(pipe!.geometry?.type).toBe('LineString')
   })
 
+  it('folds related hop geometry into SearchResult.bounds', async () => {
+    try {
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'Boundfoldland',
+          ARRAY['boundfoldland test']::text[],
+          'region',
+          ST_SetSRID(ST_MakePoint(0.0, 51.5), 4326)::geography,
+          ST_MakeEnvelope(-0.3, 51.4, 0.2, 51.6, 4326)
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          aliases = EXCLUDED.aliases,
+          kind = EXCLUDED.kind,
+          geom = EXCLUDED.geom,
+          bbox = EXCLUDED.bbox
+      `
+      await sql`
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, geom, tags) VALUES
+          (
+            'node',
+            9290010201,
+            'Boundfold Warehouse',
+            'warehouse',
+            ST_SetSRID(ST_MakePoint(0.10, 51.50), 4326),
+            '{}'::jsonb
+          ),
+          (
+            'node',
+            9290010202,
+            'Boundfold Airport',
+            'airport',
+            ST_SetSRID(ST_MakePoint(-0.20, 51.50), 4326),
+            '{}'::jsonb
+          )
+        ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+          name = EXCLUDED.name,
+          canonical_type = EXCLUDED.canonical_type,
+          geom = EXCLUDED.geom,
+          tags = EXCLUDED.tags
+      `
+      const out = await searchAssets('warehouses within 40 km of airports in boundfoldland')
+      expect(isSearchError(out)).toBe(false)
+      if (isSearchError(out)) return
+      expect(out.results.some((a) => a.osmId === 9290010201)).toBe(true)
+      expect(out.related[0]!.assets.some((a) => a.osmId === 9290010202)).toBe(true)
+      expect(out.bounds).toBeTruthy()
+      // Subject alone sits at 0.10; related airport at -0.20 must widen the west edge.
+      expect(out.bounds![0]).toBeLessThanOrEqual(-0.20)
+      expect(out.bounds![2]).toBeGreaterThanOrEqual(0.10)
+      const subjectMinLon = Math.min(...out.results.map((a) => a.lon))
+      expect(out.bounds![0]).toBeLessThan(subjectMinLon - 0.05)
+    } finally {
+      await sql`DELETE FROM assets WHERE osm_id IN (9290010201, 9290010202)`
+      await sql`DELETE FROM places WHERE lower(name) = 'boundfoldland'`
+    }
+  })
+
   it('does not treat airports near london within 20 km as a join', async () => {
     const out = await searchAssets('airports near london within 20 km')
     expect(isSearchError(out)).toBe(false)
