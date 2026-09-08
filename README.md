@@ -1,10 +1,10 @@
 # Overwatch
 
-Search physical infrastructure the way you would say it out loud.
+Search physical infrastructure the way you would say it out loud — including spatial joins.
 
-`airports near london` · `bridges in new york` · `telecom towers in karnataka`
+`pipelines within 20 km of airports near london` · `airports near london` · `bridges in new york`
 
-Overwatch is a geospatial search app. You type a place and an asset type. PostGIS answers with the stored geometry (point, line, or polygon). MapLibre draws those shapes on a dark OpenFreeMap vector basemap and clusters centroids at low zoom. There is no Overpass round trip, no Nominatim in the search path, and no Leaflet.
+Overwatch is a geospatial search app. You type a place and an asset type (or a join hop). PostGIS answers with the stored geometry (point, line, or polygon). MapLibre draws those shapes on a dark OpenFreeMap vector basemap and clusters centroids at low zoom. There is no Overpass round trip, no Nominatim in the search path, and no Leaflet.
 
 [![Overwatch showcase](docs/showcase.gif)](https://overwatch-ochre.vercel.app/showcase.mp4)
 
@@ -12,7 +12,17 @@ Live at [overwatch-ochre.vercel.app](https://overwatch-ochre.vercel.app). The cu
 
 ![Airports near London](docs/screenshots/airports-london.png)
 
-The seeded catalog behind those three queries:
+## Showcase join
+
+After a Greater London densify (`npm run db:densify`), the headline query is a spatial join:
+
+| Query | What you should see |
+| --- | --- |
+| `pipelines within 20 km of airports near london` | Pipeline subjects plus related airports inside 20 km, near London |
+
+Seed alone is thin for joins. Densify once locally (or against Neon via `DATABASE_URL`) so the gallery is not empty.
+
+The older seed spot-checks still hold:
 
 | Query | Hits | Notable |
 | --- | ---: | --- |
@@ -26,7 +36,7 @@ Counts came from `curl` against a running local app. `near` uses a 50 km radius 
 
 A natural-language parser and a structured `key:value` parser that both land on the same query object. SQL then runs meter ST_DWithin / ST_Intersects against mixed `geometry(Geometry, 4326)` with GIST indexes. The UI is a dark three-column layout: facets, result cards, map.
 
-The URL is the query. `/?q=airports%20near%20london` is a shareable search. Enter submits. Escape clears.
+The URL is the query. `/?q=pipelines%20within%2020%20km%20of%20airports%20near%20london` is a shareable search. Enter submits. Escape clears.
 
 ## Gallery
 
@@ -45,13 +55,13 @@ flowchart LR
   PostGIS --> MapLibre
 ```
 
-You type `q`. The parser emits a query object. Overwatch resolves the place from the `places` table, then PostGIS filters `assets` with `ST_DWithin` on `geom::geography` (`near`) or `ST_Intersects` on the real geom (`in` / `region` / `country`). The API returns GeoJSON of the stored geometry plus facets. MapLibre draws points, lines, and polygons, and clusters on the generated centroid.
+You type `q`. The parser emits a query object. Overwatch resolves the place from the `places` table, then PostGIS filters `assets` with `ST_DWithin` on `geom::geography` (`near`) or `ST_Intersects` on the real geom (`in` / `region` / `country`). Join hops (`within N km of <type>`) chain related asset sets. The API returns GeoJSON of the stored geometry plus facets. MapLibre draws points, lines, and polygons, and clusters on the generated centroid.
 
 `near` uses the place point and your radius in meters. `in` uses the place bbox. The old prototype hit public Overpass and timed out. This classifies assets at ingest and queries local PostGIS.
 
 ## Run it
 
-You need Node 22.12+ and Docker Compose.
+You need Node 22.12+ and Docker Compose (or any PostGIS reachable via `DATABASE_URL`).
 
 ```bash
 docker compose up -d postgres
@@ -198,19 +208,54 @@ Two tables, both in EPSG 4326.
 
 Type ids, aliases, and OSM matchers live in [`src/domain/catalog.ts`](src/domain/catalog.ts). Ingest classifies a feature once. Search never re-reads raw OSM tags.
 
+## Densify a region (Greater London)
+
+The seed is a demo. To make London joins dense, fetch one Geofabrik extract and import it. Scripts never fetch the planet; `import-pbf.sh` never downloads.
+
+```bash
+# Local Docker / default DATABASE_URL
+npm run db:up          # if needed
+npm run db:migrate
+npm run db:densify     # fetch Greater London PBF into data/ then import
+```
+
+Or step by step:
+
+```bash
+npm run db:fetch-region                  # caches data/greater-london-latest.osm.pbf
+npm run db:import-pbf                    # defaults to that path
+# or: ./scripts/import-pbf.sh /path/to/other-region.osm.pbf
+```
+
+Needs [osmium-tool](https://osmcode.org/osmium-tool/). Filter tags cover every classify type in `scripts/load-geojson.py` (aeroway, man_made, power, industrial, landuse=industrial, landuse=port, building=data_centre, communication:mobile_phone). Export keeps points, linestrings, and polygons (no centroid-on-import). The loader skips non-finite coordinates and anything outside WGS84 bounds. PBFs stay under `data/` and are gitignored.
+
+Against Neon (or any remote PostGIS):
+
+```bash
+export DATABASE_URL='postgres://…'   # your Neon URL — do not commit it
+npm run db:migrate
+npm run db:densify
+```
+
+Prove a join after import:
+
+```bash
+curl -sG 'http://localhost:3000/api/search' --data-urlencode 'q=pipelines within 20 km of airports near london' | jq '.stats, (.related|length), (.results|length)'
+```
+
 ## Load a real extract
 
-The seed is a demo. For a Geofabrik `.osm.pbf` you already downloaded:
+Short form when you already have a PBF:
 
 ```bash
 ./scripts/import-pbf.sh /path/to/region-latest.osm.pbf
 ```
 
-That needs [osmium-tool](https://osmcode.org/osmium-tool/). It filters aeroway, man_made, power, industrial, port, and data-centre tags, exports points, linestrings, and polygons (no centroid-on-import) through `scripts/load-geojson.py`. The loader skips non-finite coordinates and anything outside WGS84 bounds. Do not fetch the planet in CI.
+Do not fetch the planet in CI. Do not commit `data/*.osm.pbf`.
 
 ## Tests
 
-Vitest runs parser unit tests and PostGIS search tests against the seed. Parser coverage includes natural language, structured tokens, quoted values, radius clamps, and operator word boundaries. Search tests check the three demo queries, non-point geometries, Berlin and Texas fixtures, `unknown_place`, `invalid_query`, operator LIKE escaping, and the 500-row cap.
+Vitest runs parser unit tests and PostGIS search tests against the seed. Parser coverage includes natural language, structured tokens, quoted values, radius clamps, and operator word boundaries. Search tests check the three demo queries, non-point geometries, Berlin and Texas fixtures, `unknown_place`, `invalid_query`, operator LIKE escaping, and the 500-row cap. Classify fixtures cover `load-geojson.py` RULES without requiring osmium.
 
 ## Keyboard
 

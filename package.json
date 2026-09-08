@@ -12,7 +12,10 @@
     "db:schema": "./scripts/apply-sql.sh db/schema.sql",
     "db:migrate": "./scripts/apply-sql.sh db/migrate_geom.sql",
     "db:seed": "./scripts/apply-sql.sh db/seed.sql",
-    "db:gazetteer": "./scripts/load-gazetteer.sh"
+    "db:gazetteer": "./scripts/load-gazetteer.sh",
+    "db:fetch-region": "./scripts/fetch-region.sh",
+    "db:import-pbf": "./scripts/import-pbf.sh",
+    "db:densify": "./scripts/fetch-region.sh && ./scripts/import-pbf.sh"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.0",
