@@ -89,8 +89,12 @@ Natural language:
 
 ```
 airports near london
+aerodromes near london
 bridges in new york
 telecom towers in karnataka
+pipelines near london
+power lines near london
+substations in karnataka
 airports near london within 20 km
 airtel in karnataka
 pipelines within 20 km of airports near london
@@ -100,6 +104,8 @@ Structured tokens. Quote a value when it has spaces.
 
 ```
 type:airport near:london radius:50
+type:pipelines near:london
+type:power_line near:london
 type:datacenter region:california
 operator:airtel region:karnataka
 operator:"Long Island Rail Road" region:"new york"
@@ -108,7 +114,7 @@ type:pipeline near:london within:airport:20
 
 | Token | Meaning |
 | --- | --- |
-| `type` | Canonical asset type or an alias from the catalog (`airport`, `datacenter` → `data_center`) |
+| `type` | Canonical asset type or an alias from the catalog (`airport` / `aerodrome`, `pipelines` → `pipeline`, `power lines` → `power_line`, `datacenter` → `data_center`) |
 | `operator` | Substring match on `assets.operator`, case-insensitive. `%` and `_` are literals, not wildcards |
 | `region` / `country` | Place name. `country` prefers a country row when resolving |
 | `near` | Place name plus radius search |
@@ -117,7 +123,7 @@ type:pipeline near:london within:airport:20
 
 `within N km of <type>` (NL) and `within:<type>:<km>` (structured) are spatial join hops (up to 3 combined; structured tokens first). The place filter applies only to the innermost type. Unknown types are not hops. `within 20 km of london` remains place-radius, not a hop.
 
-You need a type or an operator, and you need a place. Missing either returns `invalid_query`. A place missing from the places table returns `unknown_place`.
+You need a type or an operator, and you need a place. Missing type/operator or missing place returns `invalid_query` with a specific message; an unrecognized `type:` token is called out as unknown. A place missing from the places table returns `unknown_place`.
 
 Demo places: London, New York, Karnataka, Mumbai, France, California, Germany, India, Berlin, and Texas. Aliases such as nyc and bombay resolve too. scripts/load-gazetteer.sh loads Natural Earth countries, admin-1, and populated places.
 

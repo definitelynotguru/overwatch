@@ -14,7 +14,16 @@ export const ASSET_TYPES = [
   {
     id: 'telecom',
     label: "Telecom Tower",
-    aliases: ['tower', 'towers', 'telecom towers', 'communication tower', 'communication towers'],
+    aliases: [
+      'tower',
+      'towers',
+      'telecoms',
+      'telecom towers',
+      'comms tower',
+      'comms towers',
+      'communication tower',
+      'communication towers',
+    ],
     matchers: [
           { 'man_made': 'tower', 'tower:type': ['communication', 'telecommunications'] },
           { 'man_made': 'communications_tower' },
@@ -36,25 +45,25 @@ export const ASSET_TYPES = [
   {
     id: 'substation',
     label: "Substation",
-    aliases: ['substations'],
+    aliases: ['substations', 'electrical substation', 'power substation', 'power substations'],
     matchers: [{ 'power': 'substation' }],
   },
   {
     id: 'port',
     label: "Port",
-    aliases: [],
+    aliases: ['ports'],
     matchers: [{ 'landuse': 'port' }],
   },
   {
     id: 'harbour',
     label: "Harbour",
-    aliases: [],
+    aliases: ['harbor', 'harbours', 'harbors'],
     matchers: [{ 'harbour': 'yes' }],
   },
   {
     id: 'warehouse',
     label: "Warehouse",
-    aliases: [],
+    aliases: ['warehouses'],
     matchers: [{ 'building': 'warehouse' }],
   },
   {
@@ -66,7 +75,7 @@ export const ASSET_TYPES = [
   {
     id: 'airport',
     label: "Airport",
-    aliases: ['airports', 'aerodrome', 'aerodromes'],
+    aliases: ['airports', 'aerodrome', 'aerodromes', 'air port'],
     matchers: [{ 'aeroway': 'aerodrome' }],
   },
   {
@@ -93,19 +102,19 @@ export const ASSET_TYPES = [
   {
     id: 'pipeline',
     label: "Pipeline",
-    aliases: [],
+    aliases: ['pipelines', 'oil pipeline', 'gas pipeline', 'pipe line', 'pipe lines'],
     matchers: [{ 'man_made': 'pipeline' }],
   },
   {
     id: 'solar',
     label: "Solar Farm",
-    aliases: [],
+    aliases: ['solar farm', 'solar farms', 'solar plant', 'solar plants'],
     matchers: [{ 'power': 'generator', 'generator:source': 'solar' }],
   },
   {
     id: 'wind',
     label: "Wind Farm",
-    aliases: [],
+    aliases: ['wind farm', 'wind farms', 'wind turbine', 'wind turbines'],
     matchers: [{ 'power': 'generator', 'generator:source': 'wind' }],
   },
   {
@@ -117,7 +126,7 @@ export const ASSET_TYPES = [
   {
     id: 'dam',
     label: "Dam",
-    aliases: [],
+    aliases: ['dams'],
     matchers: [{ 'waterway': 'dam' }],
   },
   {
@@ -328,13 +337,13 @@ export const ASSET_TYPES = [
   {
     id: 'bridge',
     label: "Bridge",
-    aliases: ['bridges'],
+    aliases: ['bridges', 'road bridge', 'road bridges'],
     matchers: [{ 'man_made': 'bridge' }],
   },
   {
     id: 'tunnel',
     label: "Tunnel",
-    aliases: [],
+    aliases: ['tunnels'],
     matchers: [{ 'tunnel': 'yes' }],
   },
   {
@@ -610,7 +619,15 @@ export const ASSET_TYPES = [
   {
     id: 'power_line',
     label: "Power Line",
-    aliases: [],
+    aliases: [
+      'power lines',
+      'powerline',
+      'powerlines',
+      'transmission line',
+      'transmission lines',
+      'electric line',
+      'electric lines',
+    ],
     matchers: [{ 'power': 'line' }],
   },
   {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { resolveType } from '../src/domain/catalog'
 import { parseQuery, validateQuery } from '../src/domain/parser'
 
 describe('parseQuery — natural language', () => {
@@ -79,10 +80,17 @@ describe('validateQuery', () => {
     expect(v.error).toMatch(/type or operator/i)
   })
 
-  it('requires geographic scope', () => {
+  it('requires a place', () => {
     const v = validateQuery(parseQuery('airports'))
     expect(v.valid).toBe(false)
-    expect(v.error).toMatch(/geographic/i)
+    expect(v.error).toMatch(/missing place/i)
+  })
+
+  it('reports unknown structured type tokens', () => {
+    const v = validateQuery(parseQuery('type:foobar near:london'))
+    expect(v.valid).toBe(false)
+    expect(v.error).toMatch(/unknown asset type/i)
+    expect(v.error).toMatch(/foobar/i)
   })
 
   it('accepts a well-formed query', () => {
@@ -346,3 +354,24 @@ describe('parseQuery — structured join hops', () => {
   })
 })
 
+describe('catalog aliases — densify DX', () => {
+  it('resolves pipelines, power lines, aerodrome, and telecom variants', () => {
+    expect(resolveType('pipelines')).toBe('pipeline')
+    expect(resolveType('oil pipeline')).toBe('pipeline')
+    expect(resolveType('power lines')).toBe('power_line')
+    expect(resolveType('powerline')).toBe('power_line')
+    expect(resolveType('transmission line')).toBe('power_line')
+    expect(resolveType('aerodrome')).toBe('airport')
+    expect(resolveType('telecoms')).toBe('telecom')
+    expect(resolveType('comms tower')).toBe('telecom')
+    expect(resolveType('electrical substation')).toBe('substation')
+    expect(resolveType('road bridges')).toBe('bridge')
+  })
+
+  it('parses structured type:pipelines and type:powerline', () => {
+    expect(parseQuery('type:pipelines near:london').type).toBe('pipeline')
+    expect(parseQuery('type:powerline near:london').type).toBe('power_line')
+    expect(parseQuery('type:aerodrome near:london').type).toBe('airport')
+    expect(validateQuery(parseQuery('type:pipelines near:london')).valid).toBe(true)
+  })
+})
