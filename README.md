@@ -14,7 +14,7 @@ Live at [overwatch-ochre.vercel.app](https://overwatch-ochre.vercel.app). The cu
 
 ## Showcase join
 
-After a Greater London densify (`npm run db:densify`), the headline query is a spatial join:
+After a densify (`npm run db:densify` for Greater London, or `npm run db:densify -- new-york` for the bridges gallery), the headline London query is a spatial join:
 
 | Query | What you should see |
 | --- | --- |
@@ -219,26 +219,38 @@ Nested join hops (`ST_DWithin` + `canonical_type` in `EXISTS`) use `assets_type_
 
 Type ids, aliases, and OSM matchers live in [`src/domain/catalog.ts`](src/domain/catalog.ts). Ingest classifies a feature once. Search never re-reads raw OSM tags.
 
-## Densify a region (Greater London)
+## Densify a region
 
-The seed is a demo. To make London joins dense, fetch one Geofabrik extract and import it. Scripts never fetch the planet; `import-pbf.sh` never downloads.
+The seed is a demo. To make joins and gallery queries dense, fetch a documented Geofabrik extract and import it through the **same** import path. Scripts never fetch the planet; `import-pbf.sh` never downloads.
+
+Documented extracts (see `scripts/regions.sh`):
+
+| Region id | Geofabrik path | Gallery / join target |
+| --- | --- | --- |
+| `greater-london` (default) | `europe/united-kingdom/england/greater-london` | London joins (`pipelines within 20 km of airports near london`) |
+| `new-york` | `north-america/us/new-york` (US state; aliases: `nyc`, `new-york-city`) | `bridges in new york` |
 
 ```bash
 # Local Docker / default DATABASE_URL
 npm run db:up          # if needed
 npm run db:migrate
-npm run db:densify     # fetch Greater London PBF into data/ then import
+npm run db:densify                 # Greater London (default)
+npm run db:densify -- new-york     # second region — densifies bridges gallery
+# or: REGION=new-york npm run db:densify
 ```
 
 Or step by step:
 
 ```bash
 npm run db:fetch-region                  # caches data/greater-london-latest.osm.pbf
-npm run db:import-pbf                    # defaults to that path
+npm run db:fetch-region -- new-york      # caches data/new-york-latest.osm.pbf
+npm run db:import-pbf                    # defaults to Greater London path
+npm run db:import-pbf -- new-york        # same import path, New York PBF
+# or: REGION=new-york npm run db:import-pbf
 # or: ./scripts/import-pbf.sh /path/to/other-region.osm.pbf
 ```
 
-Needs [osmium-tool](https://osmcode.org/osmium-tool/). Filter tags cover every classify type in `scripts/load-geojson.py` (aeroway, man_made, power, industrial, landuse=industrial, landuse=port, building=data_centre, communication:mobile_phone). Export keeps points, linestrings, and polygons (no centroid-on-import). The loader skips non-finite coordinates and anything outside WGS84 bounds. PBFs stay under `data/` and are gitignored.
+Needs [osmium-tool](https://osmcode.org/osmium-tool/). Filter tags cover every classify type in `scripts/load-geojson.py` (aeroway, man_made, power, industrial, landuse=industrial, landuse=port, building=data_centre, communication:mobile_phone). Export keeps points, linestrings, and polygons (no centroid-on-import). The loader skips non-finite coordinates and anything outside WGS84 bounds. PBFs stay under `data/` and are gitignored — never commit them.
 
 Against Neon (or any remote PostGIS):
 
@@ -249,6 +261,7 @@ set -a; source /path/to/neon.env; set +a
 # Docker container, and keep passwords off the psql argv when PGHOST/PGUSER/PGDATABASE are set.
 npm run db:migrate     # idempotent migrate_geom
 npm run db:densify     # fetch Greater London PBF (cached under data/) then import
+npm run db:densify -- new-york   # second region (New York) via the same path
 ```
 
 Verified on Neon (prod) with Greater London densify — order of magnitude only (exact
@@ -268,11 +281,12 @@ pipelines within 20 km:
 
 ```bash
 curl -sG 'http://localhost:3000/api/search' --data-urlencode 'q=pipelines within 20 km of airports near london' | jq '.stats, (.related|length), (.results|length)'
+curl -sG 'http://localhost:3000/api/search' --data-urlencode 'q=bridges in new york' | jq '.stats.total'
 ```
 
 ## Load a real extract
 
-Short form when you already have a PBF:
+Short form when you already have a PBF (still the one import path):
 
 ```bash
 ./scripts/import-pbf.sh /path/to/region-latest.osm.pbf

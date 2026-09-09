@@ -15,7 +15,7 @@
     "db:gazetteer": "./scripts/load-gazetteer.sh",
     "db:fetch-region": "./scripts/fetch-region.sh",
     "db:import-pbf": "./scripts/import-pbf.sh",
-    "db:densify": "./scripts/fetch-region.sh && ./scripts/import-pbf.sh"
+    "db:densify": "./scripts/densify.sh"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.0",
