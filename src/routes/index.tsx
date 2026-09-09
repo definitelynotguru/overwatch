@@ -112,13 +112,12 @@ function Home() {
             <div className="empty">
               <h2>Search infrastructure</h2>
               <p>Type or operator plus a place. Joins chain with within hops (up to 3).</p>
-              <div className="example-chips" role="list">
+              <div className="example-chips">
                 {QUERY_EXAMPLES.map((ex) => (
                   <button
                     key={ex}
                     type="button"
                     className="example-chip"
-                    role="listitem"
                     onClick={() => runSearch(ex)}
                   >
                     {ex}
