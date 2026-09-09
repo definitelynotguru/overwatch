@@ -14,6 +14,18 @@ type Search = { q: string }
 
 const EMPTY_RELATED: RelatedAssets[] = []
 
+/** Quiet home chips — simple, 1–3 hop joins, and structured within: tokens. */
+const QUERY_EXAMPLES = [
+  'airports near london',
+  'bridges in new york',
+  'telecom towers in karnataka',
+  'type:airport near:london radius:50',
+  'pipelines within 20 km of airports near london',
+  'type:pipeline near:london within:airport:20',
+  'industrial within 20 km of pipelines within 50 km of airports near london',
+  'warehouses within 5 km of data centers within 5 km of substations within 5 km of ports near london',
+] as const
+
 export const Route = createFileRoute('/')({
   validateSearch: (s: Record<string, unknown>): Search => ({
     q: typeof s.q === 'string' ? s.q : '',
@@ -117,21 +129,19 @@ function Home() {
           <section className="results">
             <div className="empty">
               <h2>Search infrastructure</h2>
-              <p>Queries need an asset type or operator, and a place.</p>
-              <ul>
-                <li>
-                  <code>airports near london</code>
-                </li>
-                <li>
-                  <code>bridges in new york</code>
-                </li>
-                <li>
-                  <code>telecom towers in karnataka</code>
-                </li>
-                <li>
-                  <code>type:airport near:london radius:50</code>
-                </li>
-              </ul>
+              <p>Type or operator plus a place. Joins chain with within hops (up to 3).</p>
+              <div className="example-chips">
+                {QUERY_EXAMPLES.map((ex) => (
+                  <button
+                    key={ex}
+                    type="button"
+                    className="example-chip"
+                    onClick={() => runSearch(ex)}
+                  >
+                    {ex}
+                  </button>
+                ))}
+              </div>
               <p>Enter searches. Escape clears. Share copies the URL.</p>
             </div>
           </section>
