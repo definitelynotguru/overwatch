@@ -207,12 +207,15 @@ Two tables, both in EPSG 4326.
 | --- | --- |
 | `osm_type`, `osm_id` | unique pair (`node` / `way` / `relation` + bigint) |
 | `name` | text |
-| `canonical_type` | text, btree |
+| `canonical_type` | text, btree; also composite GiST with `geom::geography` for join hops |
 | `operator` | text, btree |
 | `geom` | `geometry(Geometry, 4326)`, source of truth, GIST |
 | `centroid` | generated `geography(Point, 4326)` for pins / clusters |
 | `bbox` | generated `geometry(Polygon, 4326)` for index / display |
 | `tags` | jsonb |
+
+Nested join hops (`ST_DWithin` + `canonical_type` in `EXISTS`) use `assets_type_geom_geog_gix` so Postgres can apply type and geography in one GiST Index Cond. Apply with `npm run db:migrate` (or `./scripts/apply-sql.sh db/migrate_join_search_perf.sql` on an already-migrated DB).
+
 
 Type ids, aliases, and OSM matchers live in [`src/domain/catalog.ts`](src/domain/catalog.ts). Ingest classifies a feature once. Search never re-reads raw OSM tags.
 

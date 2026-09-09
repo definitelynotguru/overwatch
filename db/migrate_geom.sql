@@ -2,6 +2,7 @@
 -- Idempotent. Existing point rows survive via geography -> geometry cast.
 -- New installs should use db/schema.sql instead.
 CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 DO $$
 BEGIN
@@ -153,6 +154,7 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS assets_geom_gix ON assets USING GIST (geom);
 CREATE INDEX IF NOT EXISTS assets_geom_geog_gix ON assets USING GIST ((geom::geography));
+CREATE INDEX IF NOT EXISTS assets_type_geom_geog_gix ON assets USING GIST (canonical_type, (geom::geography));
 CREATE INDEX IF NOT EXISTS assets_centroid_gix ON assets USING GIST (centroid);
 CREATE INDEX IF NOT EXISTS assets_bbox_gix ON assets USING GIST (bbox);
 CREATE INDEX IF NOT EXISTS places_bbox_gix ON places USING GIST (bbox);

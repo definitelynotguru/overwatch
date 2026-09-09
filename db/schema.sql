@@ -1,5 +1,6 @@
 -- Overwatch schema: places + mixed-geometry assets in PostGIS 4326
 CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 CREATE OR REPLACE FUNCTION overwatch_asset_bbox(g geometry)
 RETURNS geometry
@@ -60,4 +61,6 @@ CREATE INDEX IF NOT EXISTS assets_geom_geog_gix ON assets USING GIST ((geom::geo
 CREATE INDEX IF NOT EXISTS assets_centroid_gix ON assets USING GIST (centroid);
 CREATE INDEX IF NOT EXISTS assets_bbox_gix ON assets USING GIST (bbox);
 CREATE INDEX IF NOT EXISTS assets_type_idx ON assets (canonical_type);
+-- Composite GiST so nested EXISTS ST_DWithin hops can push canonical_type + geography into one Index Cond.
+CREATE INDEX IF NOT EXISTS assets_type_geom_geog_gix ON assets USING GIST (canonical_type, (geom::geography));
 CREATE INDEX IF NOT EXISTS assets_operator_idx ON assets (operator);
