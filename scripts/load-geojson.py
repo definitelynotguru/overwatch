@@ -2,6 +2,9 @@
 """Upsert OSM GeoJSON into assets. Keeps Point / LineString / Polygon as-is."""
 import json, math, os, subprocess, sys
 
+# Canonical ids must exist in src/domain/catalog.ts. RULES cover exact
+# tag equality; edge variants (power cables, bridge=*, telecom masts, …)
+# are handled below so densify no longer drops tags osmium already pulls.
 RULES = [
     ("airport", {"aeroway": "aerodrome"}),
     ("helipad", {"aeroway": "helipad"}),
@@ -11,25 +14,56 @@ RULES = [
     ("substation", {"power": "substation"}),
     ("refinery", {"industrial": "refinery"}),
     ("pipeline", {"man_made": "pipeline"}),
+    ("pipeline", {"route": "pipeline"}),
+    ("power_line", {"power": "line"}),
+    ("power_line", {"power": "cable"}),
+    ("power_line", {"power": "minor_line"}),
     ("industrial", {"landuse": "industrial"}),
     ("port", {"landuse": "port"}),
 ]
 
 OSM_TYPES = {"node", "way", "relation"}
 
+# tower:type values that densify sees on man_made=tower/mast but used to drop
+TELECOM_TOWER_TYPES = {
+    "communication",
+    "telecommunications",
+    "cellular",
+    "cell",
+    "gsm",
+    "umts",
+    "lte",
+    "mobile",
+    "microwave",
+    "radio",
+}
+
+BRIDGE_NO = {"no", "none", "0", "false"}
+
 
 def classify(tags):
     for cid, need in RULES:
         if all(tags.get(k) == v for k, v in need.items()):
             return cid
+    # Highway/railway bridges: bridge=yes|viaduct|… (osmium nwr/bridge)
+    bv = tags.get("bridge")
+    if bv and bv.lower() not in BRIDGE_NO:
+        return "bridge"
     tt = tags.get("tower:type")
-    if tags.get("man_made") == "tower" and tt in {"communication", "telecommunications"}:
+    mm = tags.get("man_made")
+    if mm == "tower" and tt == "broadcast":
+        return "broadcast_tower"
+    if mm in {"tower", "mast"} and tt in TELECOM_TOWER_TYPES:
         return "telecom"
-    if tags.get("man_made") == "communications_tower":
+    if mm == "communications_tower":
         return "telecom"
     if tags.get("communication:mobile_phone") == "yes":
         return "telecom"
-    if tags.get("man_made") == "works" and tags.get("product") == "petroleum":
+    if tags.get("communication:radio") == "yes":
+        return "telecom"
+    if tags.get("telecom") == "exchange":
+        return "telephone_exchange"
+    if mm == "works" and tags.get("product") == "petroleum":
         return "refinery"
     return None
 

@@ -1,0 +1,556 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "way/1001",
+      "properties": {
+        "power": "line",
+        "name": "OH Line",
+        "expected": "power_line",
+        "@type": "way",
+        "@id": 1001
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1002",
+      "properties": {
+        "power": "cable",
+        "name": "UG Cable",
+        "location": "underground",
+        "expected": "power_line",
+        "@type": "way",
+        "@id": 1002
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1003",
+      "properties": {
+        "power": "minor_line",
+        "name": "Minor",
+        "expected": "power_line",
+        "@type": "way",
+        "@id": 1003
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/1004",
+      "properties": {
+        "power": "plant",
+        "name": "Plant",
+        "expected": "power_plant",
+        "@type": "way",
+        "@id": 1004
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ],
+          [
+            -0.12,
+            51.5
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/1005",
+      "properties": {
+        "power": "substation",
+        "name": "Sub",
+        "expected": "substation",
+        "@type": "node",
+        "@id": 1005
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.12,
+          51.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/2001",
+      "properties": {
+        "man_made": "bridge",
+        "name": "Named Bridge",
+        "expected": "bridge",
+        "@type": "way",
+        "@id": 2001
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ],
+          [
+            -0.12,
+            51.5
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/2002",
+      "properties": {
+        "bridge": "yes",
+        "highway": "primary",
+        "name": "Road Bridge",
+        "expected": "bridge",
+        "@type": "way",
+        "@id": 2002
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/2003",
+      "properties": {
+        "bridge": "viaduct",
+        "railway": "rail",
+        "name": "Viaduct",
+        "expected": "bridge",
+        "@type": "way",
+        "@id": 2003
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/2004",
+      "properties": {
+        "bridge": "no",
+        "highway": "primary",
+        "name": "Not a bridge",
+        "expected": "",
+        "@type": "way",
+        "@id": 2004
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/3001",
+      "properties": {
+        "man_made": "pipeline",
+        "substance": "gas",
+        "name": "Gas",
+        "expected": "pipeline",
+        "@type": "way",
+        "@id": 3001
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/3002",
+      "properties": {
+        "route": "pipeline",
+        "name": "Route Pipe",
+        "substance": "oil",
+        "expected": "pipeline",
+        "@type": "way",
+        "@id": 3002
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/4001",
+      "properties": {
+        "man_made": "tower",
+        "tower:type": "communication",
+        "expected": "telecom",
+        "@type": "node",
+        "@id": 4001
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.12,
+          51.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/4002",
+      "properties": {
+        "man_made": "tower",
+        "tower:type": "cellular",
+        "expected": "telecom",
+        "@type": "node",
+        "@id": 4002
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.12,
+          51.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/4003",
+      "properties": {
+        "man_made": "mast",
+        "tower:type": "communication",
+        "expected": "telecom",
+        "@type": "node",
+        "@id": 4003
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.12,
+          51.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/4004",
+      "properties": {
+        "man_made": "mast",
+        "tower:type": "microwave",
+        "expected": "telecom",
+        "@type": "node",
+        "@id": 4004
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.12,
+          51.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/4005",
+      "properties": {
+        "man_made": "communications_tower",
+        "expected": "telecom",
+        "@type": "node",
+        "@id": 4005
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.12,
+          51.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/4006",
+      "properties": {
+        "communication:mobile_phone": "yes",
+        "expected": "telecom",
+        "@type": "node",
+        "@id": 4006
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.12,
+          51.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/4007",
+      "properties": {
+        "communication:radio": "yes",
+        "name": "Radio site",
+        "expected": "telecom",
+        "@type": "node",
+        "@id": 4007
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.12,
+          51.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/4008",
+      "properties": {
+        "man_made": "tower",
+        "tower:type": "broadcast",
+        "expected": "broadcast_tower",
+        "@type": "node",
+        "@id": 4008
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.12,
+          51.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "node/4009",
+      "properties": {
+        "telecom": "exchange",
+        "name": "Exchange",
+        "expected": "telephone_exchange",
+        "@type": "node",
+        "@id": 4009
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.12,
+          51.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/5001",
+      "properties": {
+        "highway": "residential",
+        "name": "Street",
+        "expected": "",
+        "@type": "way",
+        "@id": 5001
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/5002",
+      "properties": {
+        "power": "pole",
+        "expected": "",
+        "@type": "way",
+        "@id": 5002
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/5003",
+      "properties": {
+        "aeroway": "aerodrome",
+        "name": "LHR",
+        "expected": "airport",
+        "@type": "way",
+        "@id": 5003
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ],
+          [
+            -0.12,
+            51.5
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "way/5004",
+      "properties": {
+        "man_made": "works",
+        "product": "petroleum",
+        "expected": "refinery",
+        "@type": "way",
+        "@id": 5004
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            -0.12,
+            51.5
+          ],
+          [
+            -0.11,
+            51.5
+          ],
+          [
+            -0.11,
+            51.51
+          ],
+          [
+            -0.12,
+            51.5
+          ]
+        ]
+      }
+    }
+  ]
+}

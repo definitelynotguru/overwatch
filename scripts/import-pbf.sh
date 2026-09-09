@@ -37,12 +37,15 @@ command -v osmium >/dev/null || { echo "install osmium-tool"; exit 1; }
 TMP="$(mktemp -d)"
 trap "rm -rf $TMP" EXIT
 # aeroway → airport, helipad
-# man_made → bridge, pipeline, telecom towers, works/refinery
-# power → power_plant, substation
+# man_made → bridge, pipeline, telecom towers/masts, works/refinery
+# power → power_plant, substation, power_line (line/cable/minor_line)
 # industrial → refinery
 # landuse=industrial / landuse=port → industrial, port
 # building=data_centre → data_center
-# communication:mobile_phone → telecom (key not covered by man_made alone)
+# communication:* → telecom (keys not covered by man_made alone)
+# bridge=* → bridge (highway/railway bridges without man_made=bridge)
+# route=pipeline → pipeline relations/ways
+# telecom=exchange → telephone_exchange
 osmium tags-filter "$PBF" \
   nwr/aeroway \
   nwr/man_made \
@@ -52,6 +55,10 @@ osmium tags-filter "$PBF" \
   nwr/landuse=port \
   nwr/building=data_centre \
   nwr/communication:mobile_phone \
+  nwr/communication:radio \
+  nwr/bridge \
+  nwr/route=pipeline \
+  nwr/telecom \
   -o "$TMP/filtered.osm.pbf" --overwrite
 osmium export "$TMP/filtered.osm.pbf" --geometry-types=point,linestring,polygon -a type,id -o "$TMP/features.geojson" --overwrite
 python3 "$ROOT/scripts/load-geojson.py" "$TMP/features.geojson"

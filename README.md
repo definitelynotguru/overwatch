@@ -250,7 +250,7 @@ npm run db:import-pbf -- new-york        # same import path, New York PBF
 # or: ./scripts/import-pbf.sh /path/to/other-region.osm.pbf
 ```
 
-Needs [osmium-tool](https://osmcode.org/osmium-tool/). Filter tags cover every classify type in `scripts/load-geojson.py` (aeroway, man_made, power, industrial, landuse=industrial, landuse=port, building=data_centre, communication:mobile_phone). Export keeps points, linestrings, and polygons (no centroid-on-import). The loader skips non-finite coordinates and anything outside WGS84 bounds. PBFs stay under `data/` and are gitignored — never commit them.
+Needs [osmium-tool](https://osmcode.org/osmium-tool/). Filter tags cover every classify type in `scripts/load-geojson.py` (aeroway, man_made, power, industrial, landuse=industrial, landuse=port, building=data_centre, communication:mobile_phone, communication:radio, bridge, route=pipeline, telecom). Export keeps points, linestrings, and polygons (no centroid-on-import). The loader skips non-finite coordinates and anything outside WGS84 bounds. Classify maps edge OSM tags (power line/cable/minor_line, bridge=*, telecom mast/cellular/radio, route=pipeline, telecom=exchange) onto existing catalog ids only — see `tests/classify_test.py`. PBFs stay under `data/` and are gitignored — never commit them.
 
 Against Neon (or any remote PostGIS):
 
