@@ -15,12 +15,16 @@ type Search = { q: string }
 
 const EMPTY_RELATED: RelatedAssets[] = []
 
-/** Quiet home chips — simple, 1–3 hop joins, and structured within: tokens. */
-const QUERY_EXAMPLES = [
+/** Starter chips shown on the empty home rail. */
+const STARTER_EXAMPLES = [
   'airports near london',
   'bridges in new york',
   'telecom towers in karnataka',
   'type:airport near:london radius:50',
+] as const
+
+/** Multi-hop / structured examples under a disclosure. */
+const MORE_EXAMPLES = [
   'pipelines within 20 km of airports near london',
   'type:pipeline near:london within:airport:20',
   'industrial within 20 km of pipelines within 50 km of airports near london',
@@ -46,6 +50,7 @@ function Home() {
   const [cluster, setCluster] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [flyTo, setFlyTo] = useState<Asset | null>(null)
+  const [resetHomeTick, setResetHomeTick] = useState(0)
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const [operatorFilter, setOperatorFilter] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
@@ -57,6 +62,7 @@ function Home() {
     setSelectedId(null)
     setFlyTo(null)
     setExportError(null)
+    if (!q) setResetHomeTick((n) => n + 1)
   }, [q])
 
   const query = useQuery({
@@ -131,10 +137,10 @@ function Home() {
         {!q && (
           <section className="results">
             <div className="empty">
-              <h2>Search infrastructure</h2>
-              <p>Type or operator plus a place. Joins chain with within hops (up to 3).</p>
+              <h2>Find infrastructure on the map</h2>
+              <p>Search by asset type or operator and a place — for example airports near London.</p>
               <div className="example-chips">
-                {QUERY_EXAMPLES.map((ex) => (
+                {STARTER_EXAMPLES.map((ex) => (
                   <button
                     key={ex}
                     type="button"
@@ -145,7 +151,22 @@ function Home() {
                   </button>
                 ))}
               </div>
-              <p>Enter searches. Escape clears. Share copies the URL.</p>
+              <details className="example-more">
+                <summary>More examples</summary>
+                <div className="example-chips">
+                  {MORE_EXAMPLES.map((ex) => (
+                    <button
+                      key={ex}
+                      type="button"
+                      className="example-chip"
+                      onClick={() => runSearch(ex)}
+                    >
+                      {ex}
+                    </button>
+                  ))}
+                </div>
+              </details>
+              <p>Press Enter to search. Escape clears. Share copies the URL.</p>
             </div>
           </section>
         )}
@@ -219,6 +240,7 @@ function Home() {
             cluster={cluster}
             selectedId={selectedId}
             flyTo={flyTo}
+            resetHome={resetHomeTick}
             onClusterChange={setCluster}
             onSelect={(id) => {
               setSelectedId(id)
