@@ -319,6 +319,17 @@ function relatedWhere(
         )
     )`
 }
+function bumpFacetCounts(
+  types: Record<string, number>,
+  operators: Record<string, number>,
+  assets: { type: string; operator: string | null }[],
+) {
+  for (const a of assets) {
+    types[a.type] = (types[a.type] ?? 0) + 1
+    const op = a.operator?.trim() ? a.operator : 'Unknown'
+    operators[op] = (operators[op] ?? 0) + 1
+  }
+}
 
 function foldBounds(rowSets: AssetRow[][]): [number, number, number, number] | null {
   let minLon = Infinity
@@ -520,6 +531,9 @@ export async function searchAssets(q: string): Promise<SearchResult | SearchErro
     useNear,
     radiusM,
   )
+
+  // Facet honesty: map shows related hops, so type/operator counts include them.
+  for (const hop of related) bumpFacetCounts(types, operators, hop.assets)
 
   const bounds = foldBounds([rows, ...relatedRows])
 
