@@ -65,6 +65,28 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(c({"bridge": "viaduct", "railway": "rail"}), "bridge")
         self.assertEqual(c({"bridge": "aqueduct"}), "bridge")
         self.assertIsNone(c({"bridge": "no", "highway": "primary"}))
+        # deny-list case variants
+        self.assertIsNone(c({"bridge": "NO", "highway": "primary"}))
+        self.assertIsNone(c({"bridge": "none", "highway": "primary"}))
+        self.assertIsNone(c({"bridge": "FALSE", "highway": "secondary"}))
+        self.assertIsNone(c({"bridge": "0", "highway": "primary"}))
+        self.assertEqual(c({"bridge": "YES", "highway": "primary"}), "bridge")
+        self.assertEqual(c({"bridge": "culvert", "highway": "path"}), "bridge")
+        self.assertEqual(c({"bridge": "movable", "highway": "primary"}), "bridge")
+
+    def test_bridge_fallback_precedence(self):
+        c = self.mod.classify
+        # RULES win over bridge=* fallback
+        self.assertEqual(c({"power": "plant", "bridge": "yes"}), "power_plant")
+        # man_made=bridge RULE wins even when bridge=no
+        self.assertEqual(c({"man_made": "bridge", "bridge": "no"}), "bridge")
+        # bridge fallback before telecom when only bridge + tower tags
+        self.assertEqual(
+            c({"bridge": "yes", "man_made": "tower", "tower:type": "broadcast"}),
+            "bridge",
+        )
+        # bridge:no must not classify as bridge
+        self.assertIsNone(c({"bridge": "no"}))
 
     def test_pipeline_variants(self):
         c = self.mod.classify
@@ -79,12 +101,24 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(c({"man_made": "tower", "tower:type": "cellular"}), "telecom")
         self.assertEqual(c({"man_made": "mast", "tower:type": "communication"}), "telecom")
         self.assertEqual(c({"man_made": "mast", "tower:type": "microwave"}), "telecom")
+        # Extra TELECOM_TOWER_TYPES samples (not exhaustive)
+        self.assertEqual(c({"man_made": "tower", "tower:type": "lte"}), "telecom")
+        self.assertEqual(c({"man_made": "mast", "tower:type": "gsm"}), "telecom")
+        self.assertEqual(c({"man_made": "tower", "tower:type": "radio"}), "telecom")
+        self.assertEqual(c({"man_made": "mast", "tower:type": "mobile"}), "telecom")
         self.assertEqual(c({"man_made": "communications_tower"}), "telecom")
         self.assertEqual(c({"communication:mobile_phone": "yes"}), "telecom")
         self.assertEqual(c({"communication:radio": "yes"}), "telecom")
+        # Strict yes/exchange negatives
+        self.assertIsNone(c({"communication:radio": "no"}))
+        self.assertIsNone(c({"communication:radio": "Yes"}))
+        self.assertIsNone(c({"telecom": "data"}))
+        self.assertIsNone(c({}))
         self.assertEqual(
             c({"man_made": "tower", "tower:type": "broadcast"}), "broadcast_tower"
         )
+        # mast+broadcast is not broadcast_tower (tower-only)
+        self.assertIsNone(c({"man_made": "mast", "tower:type": "broadcast"}))
         self.assertEqual(c({"telecom": "exchange"}), "telephone_exchange")
 
     def test_fixture_geojson(self):
