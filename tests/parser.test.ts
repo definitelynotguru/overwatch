@@ -109,6 +109,20 @@ describe('validateQuery — empty input', () => {
 })
 
 describe('parseQuery — quoted structured values', () => {
+  it('keeps quoted operator with trailing type phrase intact', () => {
+    const q = parseQuery('operator:"airtel pipelines" near:london')
+    expect(q.operator).toBe('airtel pipelines')
+    expect(q.type).toBeNull()
+    expect(q.near).toBe('london')
+  })
+
+  it('still strips trailing type phrase from unquoted operator', () => {
+    const q = parseQuery('operator:airtel pipelines near:london')
+    expect(q.operator).toBe('airtel')
+    expect(q.type).toBe('pipeline')
+    expect(q.near).toBe('london')
+  })
+
   it('accepts quoted multi-word operator and region', () => {
     const q = parseQuery('operator:"Long Island Rail Road" region:"new york"')
     expect(q.operator).toBe('long island rail road')
