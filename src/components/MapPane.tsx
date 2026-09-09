@@ -16,6 +16,8 @@ type Props = {
   cluster: boolean
   selectedId: string | null
   flyTo: Asset | null
+  /** Increment when query clears so the map returns to the home camera. */
+  resetHome?: number
   onSelect: (id: string) => void
   onClusterChange: (cluster: boolean) => void
   legend?: LegendItem[]
@@ -173,15 +175,7 @@ function addLayers(map: maplibregl.Map, cluster: boolean) {
       source: 'hits',
       filter: ['has', 'point_count'],
       paint: {
-        'circle-color': [
-          'step',
-          ['get', 'point_count'],
-          '#60a5fa',
-          8,
-          '#fbbf24',
-          25,
-          '#f97316',
-        ],
+        'circle-color': '#3b82f6',
         'circle-radius': ['step', ['get', 'point_count'], 16, 8, 20, 25, 26],
         'circle-stroke-width': 2,
         'circle-stroke-color': '#0b0b0b',
@@ -212,7 +206,7 @@ function addLayers(map: maplibregl.Map, cluster: boolean) {
           'text-size': 12,
           'text-font': ['Noto Sans Regular'],
         },
-        paint: { 'text-color': '#111111' },
+        paint: { 'text-color': '#ffffff' },
       })
     } catch {
       // Circles stay even if glyphs are missing.
@@ -278,6 +272,7 @@ export function MapPane({
   cluster,
   selectedId,
   flyTo,
+  resetHome = 0,
   onSelect,
   onClusterChange,
   legend,
@@ -404,6 +399,13 @@ export function MapPane({
     if (!flyTo || !mapRef.current) return
     mapRef.current.flyTo({ center: [flyTo.lon, flyTo.lat], zoom: 13, speed: 1.2 })
   }, [flyTo])
+
+  useEffect(() => {
+    if (!resetHome) return
+    const map = mapRef.current
+    if (!map) return
+    map.easeTo({ center: [0, 20], zoom: 2, duration: 500 })
+  }, [resetHome])
 
   useEffect(() => {
     const map = mapRef.current
