@@ -1,16 +1,36 @@
 #!/usr/bin/env bash
 # Import a local Geofabrik extract into Overwatch. Never fetches data.
+# Single import path for every documented region (and any other local PBF).
 # Nodes stay points. Ways stay linestrings. Closed ways / multipolygons that
 # are areas stay polygons. No centroid-on-import.
 # Filters cover every RULES / classify type in load-geojson.py.
-# Usage: ./scripts/import-pbf.sh [/path/to/region-latest.osm.pbf]
+# Usage:
+#   ./scripts/import-pbf.sh [/path/to/region-latest.osm.pbf | region]
+#   REGION=new-york ./scripts/import-pbf.sh
+#   npm run db:import-pbf -- new-york
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PBF="${1:-$ROOT/data/greater-london-latest.osm.pbf}"
+# shellcheck source=regions.sh
+source "$ROOT/scripts/regions.sh"
+
+TOKEN="${1:-}"
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  echo "Usage: $0 [/path/to/region-latest.osm.pbf | region]"
+  echo "       REGION=<region> $0"
+  echo
+  ow_list_regions
+  exit 0
+fi
+if [[ -n "${1:-}" && "${1:-}" == -* ]]; then
+  echo "Usage: $0 [/path/to/region-latest.osm.pbf | region]" >&2
+  exit 1
+fi
+
+PBF="$(ow_resolve_pbf "$ROOT" "$TOKEN")" || exit 1
 if [[ ! -f "$PBF" ]]; then
-  echo "Usage: $0 [/path/to/region-latest.osm.pbf]" >&2
+  echo "Usage: $0 [/path/to/region-latest.osm.pbf | region]" >&2
   echo "Missing PBF: $PBF" >&2
-  echo "Fetch first: ./scripts/fetch-region.sh" >&2
+  echo "Fetch first: ./scripts/fetch-region.sh ${TOKEN:-${REGION:-}}" >&2
   exit 1
 fi
 command -v osmium >/dev/null || { echo "install osmium-tool"; exit 1; }
