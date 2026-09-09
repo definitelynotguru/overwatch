@@ -5,6 +5,7 @@ import { SearchHeader } from '../components/SearchHeader'
 import { FacetPanel } from '../components/FacetPanel'
 import { ResultList } from '../components/ResultList'
 import { isSearchError, type Asset, type RelatedAssets, type SearchError, type SearchResult } from '../domain/types'
+import { downloadSearchGeoJSON } from '../domain/geojson'
 import { HOP_COLORS, SUBJECT_COLOR, formatWithinM, type LegendItem } from '../domain/hops'
 
 const MapPane = lazy(() => import('../components/MapPane').then((m) => ({ default: m.MapPane })))
@@ -161,6 +162,11 @@ function Home() {
             onSelect={(asset) => {
               setSelectedId(asset.id)
               setFlyTo(asset)
+            }}
+            onExport={() => {
+              void downloadSearchGeoJSON(result, q).catch(() => {
+                // keep UI quiet; download failure is non-fatal
+              })
             }}
           />
         )}

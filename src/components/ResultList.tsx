@@ -60,11 +60,12 @@ type Props = {
   related?: RelatedAssets[]
   selectedId: string | null
   onSelect: (asset: Asset) => void
+  onExport?: () => void
 }
 
 const EMPTY_RELATED: RelatedAssets[] = []
 
-export function ResultList({ total, assets, related = EMPTY_RELATED, selectedId, onSelect }: Props) {
+export function ResultList({ total, assets, related = EMPTY_RELATED, selectedId, onSelect, onExport }: Props) {
   const selectedRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
@@ -74,11 +75,18 @@ export function ResultList({ total, assets, related = EMPTY_RELATED, selectedId,
   return (
     <section className="results">
       <div className="results-head">
-        {total.toLocaleString()} result{total === 1 ? '' : 's'}
-        {assets.length < total ? ` · showing ${assets.length}` : ''}
-        {related.some((r) => r.assets.length > 0)
-          ? ` · ${related.reduce((n, r) => n + r.assets.length, 0)} related`
-          : ''}
+        <span>
+          {total.toLocaleString()} result{total === 1 ? '' : 's'}
+          {assets.length < total ? ` · showing ${assets.length}` : ''}
+          {related.some((r) => r.assets.length > 0)
+            ? ` · ${related.reduce((n, r) => n + r.assets.length, 0)} related`
+            : ''}
+        </span>
+        {onExport ? (
+          <button type="button" className="ghost results-export" onClick={onExport}>
+            Export
+          </button>
+        ) : null}
       </div>
       {assets.map((a) => (
         <AssetCard

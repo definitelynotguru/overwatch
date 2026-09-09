@@ -185,6 +185,10 @@ body {
 }
 
 .results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 10px 14px;
   color: var(--muted);
   border-bottom: 1px solid var(--border);
@@ -192,6 +196,11 @@ body {
   top: 0;
   background: var(--bg);
   z-index: 1;
+}
+.results-export {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  font-size: 12px;
 }
 
 .card {

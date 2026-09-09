@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiSearchGeojsonRouteImport } from './routes/api/search[.]geojson'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSearchGeojsonRoute = ApiSearchGeojsonRouteImport.update({
+  id: '/api/search.geojson',
+  path: '/api/search.geojson',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSearchRoute = ApiSearchRouteImport.update({
@@ -26,26 +32,30 @@ const ApiSearchRoute = ApiSearchRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/search': typeof ApiSearchRoute
+  '/api/search.geojson': typeof ApiSearchGeojsonRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/search': typeof ApiSearchRoute
+  '/api/search.geojson': typeof ApiSearchGeojsonRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/search': typeof ApiSearchRoute
+  '/api/search.geojson': typeof ApiSearchGeojsonRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/search'
+  fullPaths: '/' | '/api/search' | '/api/search.geojson'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/search'
-  id: '__root__' | '/' | '/api/search'
+  to: '/' | '/api/search' | '/api/search.geojson'
+  id: '__root__' | '/' | '/api/search' | '/api/search.geojson'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiSearchGeojsonRoute: typeof ApiSearchGeojsonRoute
   ApiSearchRoute: typeof ApiSearchRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/search.geojson': {
+      id: '/api/search.geojson'
+      path: '/api/search.geojson'
+      fullPath: '/api/search.geojson'
+      preLoaderRoute: typeof ApiSearchGeojsonRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/search': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiSearchGeojsonRoute: ApiSearchGeojsonRoute,
   ApiSearchRoute: ApiSearchRoute,
 }
 export const routeTree = rootRouteImport
