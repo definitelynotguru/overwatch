@@ -8,7 +8,7 @@ Overwatch is a geospatial search app. You type a place and an asset type (or a j
 
 [![Overwatch showcase](docs/showcase.gif)](https://overwatch-ochre.vercel.app/showcase.mp4)
 
-Live at [overwatch-ochre.vercel.app](https://overwatch-ochre.vercel.app). The cut above is also at [`/showcase.mp4`](https://overwatch-ochre.vercel.app/showcase.mp4).
+Live at [overwatch-ochre.vercel.app](https://overwatch-ochre.vercel.app). The cut above is the join demo (`pipelines within 20 km of airports near london`); also at [`/showcase.mp4`](https://overwatch-ochre.vercel.app/showcase.mp4).
 
 ![Airports near London](docs/screenshots/airports-london.png)
 
