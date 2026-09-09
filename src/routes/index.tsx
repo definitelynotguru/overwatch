@@ -35,6 +35,7 @@ function Home() {
   const [flyTo, setFlyTo] = useState<Asset | null>(null)
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const [operatorFilter, setOperatorFilter] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   useEffect(() => setMounted(true), [])
   useEffect(() => {
@@ -42,6 +43,7 @@ function Home() {
     setOperatorFilter(null)
     setSelectedId(null)
     setFlyTo(null)
+    setExportError(null)
   }, [q])
 
   const query = useQuery({
@@ -66,7 +68,22 @@ function Home() {
     })
   }, [result, typeFilter, operatorFilter])
 
-  const related = result?.related ?? EMPTY_RELATED
+  const related = useMemo(() => {
+    if (!result) return EMPTY_RELATED
+    if (!typeFilter && !operatorFilter) return result.related
+    return result.related.map((hop) => ({
+      ...hop,
+      assets: hop.assets.filter((a) => {
+        if (typeFilter && a.type !== typeFilter) return false
+        if (operatorFilter) {
+          const op = a.operator?.trim() ? a.operator : 'Unknown'
+          if (op !== operatorFilter) return false
+        }
+        return true
+      }),
+    }))
+  }, [result, typeFilter, operatorFilter])
+
   const legend: LegendItem[] = []
   if (related.length > 0) {
     const subjectType = result?.query.type
@@ -153,6 +170,12 @@ function Home() {
           </section>
         )}
 
+        {q && exportError && (
+          <section className="results">
+            <div className="status" role="status">{exportError}</div>
+          </section>
+        )}
+
         {q && !query.isFetching && result && result.stats.total > 0 && (
           <ResultList
             total={assets.length === result.results.length ? result.stats.total : assets.length}
@@ -164,8 +187,10 @@ function Home() {
               setFlyTo(asset)
             }}
             onExport={() => {
-              void downloadSearchGeoJSON(result, q).catch(() => {
-                // keep UI quiet; download failure is non-fatal
+              setExportError(null)
+              const exportResult = { ...result, results: assets, related }
+              void downloadSearchGeoJSON(exportResult, q).catch((err: unknown) => {
+                setExportError(err instanceof Error ? err.message : 'Export failed')
               })
             }}
           />

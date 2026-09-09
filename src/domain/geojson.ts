@@ -120,11 +120,16 @@ function triggerDownload(json: string, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-/** Prefer client-side build from SearchResult; else fetch `/api/search.geojson`. */
+/**
+ * Build GeoJSON from the provided SearchResult (may already be filter-sliced).
+ * geometryOf falls back to lon/lat Points when full geometry is absent.
+ * Falls back to `/api/search.geojson` only when the provided result has no features.
+ */
 export async function downloadSearchGeoJSON(result: SearchResult, q: string): Promise<void> {
   const filename = filenameForQuery(q)
-  if (geometriesPresent(result)) {
-    triggerDownload(JSON.stringify(searchResultToGeoJSON(result)), filename)
+  const fc = searchResultToGeoJSON(result)
+  if (fc.features.length > 0) {
+    triggerDownload(JSON.stringify(fc), filename)
     return
   }
   const res = await fetch(`/api/search.geojson?q=${encodeURIComponent(q)}`)
