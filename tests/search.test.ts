@@ -610,6 +610,66 @@ describe('searchAssets — spatial join hops', () => {
     expect(pipe!.geometry?.type).toBe('LineString')
   })
 
+
+  it('includes related hop assets in type and operator facet counts', async () => {
+    try {
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'Facetland',
+          ARRAY['facetland test']::text[],
+          'region',
+          ST_SetSRID(ST_MakePoint(30.0, 30.0), 4326)::geography,
+          ST_MakeEnvelope(29.9, 29.9, 30.1, 30.1, 4326)
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          aliases = EXCLUDED.aliases,
+          kind = EXCLUDED.kind,
+          geom = EXCLUDED.geom,
+          bbox = EXCLUDED.bbox
+      `
+      await sql`
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, operator, geom, tags) VALUES
+          (
+            'node',
+            9290010301,
+            'Facetland Warehouse',
+            'warehouse',
+            'FacetWh',
+            ST_SetSRID(ST_MakePoint(30.00, 30.0), 4326),
+            '{}'::jsonb
+          ),
+          (
+            'node',
+            9290010302,
+            'Facetland Airport',
+            'airport',
+            'FacetAir',
+            ST_SetSRID(ST_MakePoint(30.02, 30.0), 4326),
+            '{}'::jsonb
+          )
+        ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+          name = EXCLUDED.name,
+          canonical_type = EXCLUDED.canonical_type,
+          operator = EXCLUDED.operator,
+          geom = EXCLUDED.geom,
+          tags = EXCLUDED.tags
+      `
+      const out = await searchAssets('warehouses within 40 km of airports in facetland')
+      expect(isSearchError(out)).toBe(false)
+      if (isSearchError(out)) return
+      expect(out.results.some((a) => a.osmId === 9290010301)).toBe(true)
+      expect(out.related[0]!.assets.some((a) => a.osmId === 9290010302)).toBe(true)
+      // Subjects alone would only expose warehouse; related airport must appear in facets.
+      expect(out.stats.types.warehouse).toBeGreaterThanOrEqual(1)
+      expect(out.stats.types.airport).toBeGreaterThanOrEqual(1)
+      expect(out.stats.operators.FacetWh).toBeGreaterThanOrEqual(1)
+      expect(out.stats.operators.FacetAir).toBeGreaterThanOrEqual(1)
+    } finally {
+      await sql`DELETE FROM assets WHERE osm_id IN (9290010301, 9290010302)`
+      await sql`DELETE FROM places WHERE lower(name) = 'facetland'`
+    }
+  })
+
   it('folds related hop geometry into SearchResult.bounds', async () => {
     try {
       await sql`
