@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveType } from '../src/domain/catalog'
-import { parseQuery, validateQuery } from '../src/domain/parser'
+import { parseQuery, toCanonicalQuery, validateQuery } from '../src/domain/parser'
 
 describe('parseQuery — natural language', () => {
   it('parses airports near london', () => {
@@ -373,5 +373,77 @@ describe('catalog aliases — densify DX', () => {
     expect(parseQuery('type:powerline near:london').type).toBe('power_line')
     expect(parseQuery('type:aerodrome near:london').type).toBe('airport')
     expect(validateQuery(parseQuery('type:pipelines near:london')).valid).toBe(true)
+  })
+})
+
+describe('toCanonicalQuery', () => {
+  it('rewrites NL join queries into type:/near:/within:type:km', () => {
+    expect(toCanonicalQuery('pipelines within 20 km of airports near london')).toBe(
+      'type:pipeline near:london within:airport:20',
+    )
+  })
+
+  it('rewrites multi-hop NL joins', () => {
+    expect(
+      toCanonicalQuery(
+        'data centers within 10 km of substations within 50 km of airports near london',
+      ),
+    ).toBe('type:data_center near:london within:substation:10 within:airport:50')
+  })
+
+  it('uses region: for in-place queries', () => {
+    expect(toCanonicalQuery('bridges in new york')).toBe('type:bridge region:new_york')
+  })
+
+  it('includes non-default radius', () => {
+    expect(toCanonicalQuery('airports near london within 20 km')).toBe(
+      'type:airport near:london radius:20',
+    )
+  })
+
+  it('is idempotent on structured input', () => {
+    const structured = 'type:pipeline near:london within:airport:20'
+    expect(toCanonicalQuery(structured)).toBe(structured)
+  })
+
+  it('round-trips NL join parse through canonicalize', () => {
+    const nl = 'pipelines within 20 km of airports near london'
+    const canonical = toCanonicalQuery(nl)
+    const fromNl = parseQuery(nl)
+    const fromCanonical = parseQuery(canonical)
+    expect(fromCanonical.type).toBe(fromNl.type)
+    expect(fromCanonical.near).toBe(fromNl.near)
+    expect(fromCanonical.hops).toEqual(fromNl.hops)
+    expect(fromCanonical.radius).toBe(fromNl.radius)
+  })
+
+  it('leaves invalid queries unchanged', () => {
+    expect(toCanonicalQuery('near london')).toBe('near london')
+    expect(toCanonicalQuery('airports')).toBe('airports')
+  })
+
+  it('returns empty for blank input', () => {
+    expect(toCanonicalQuery('')).toBe('')
+    expect(toCanonicalQuery('   ')).toBe('')
+  })
+
+  it('keeps operator in the canonical form', () => {
+    expect(toCanonicalQuery('operator:airtel pipelines within 20 km of airports in karnataka')).toBe(
+      'type:pipeline operator:airtel region:karnataka within:airport:20',
+    )
+  })
+
+  it('canonicalizes multi-word quoted operators with underscores', () => {
+    const input = 'operator:"Long Island Rail Road" type:airport near:london'
+    const canonical = toCanonicalQuery(input)
+    expect(canonical).toBe('type:airport operator:long_island_rail_road near:london')
+    const roundTrip = parseQuery(canonical)
+    expect(roundTrip.operator).toBe('long island rail road')
+    expect(roundTrip.type).toBe('airport')
+    expect(roundTrip.near).toBe('london')
+  })
+
+  it('includes country in the canonical form', () => {
+    expect(toCanonicalQuery('type:airport country:france')).toBe('type:airport country:france')
   })
 })
