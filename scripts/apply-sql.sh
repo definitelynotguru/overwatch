@@ -11,22 +11,28 @@ if [[ -z "$FILE" || ! -f "$FILE" ]]; then
   exit 1
 fi
 
+has_pg_triple() {
+  [[ -n "${PGHOST:-}" && -n "${PGUSER:-}" && -n "${PGDATABASE:-}" ]]
+}
+
 run_psql_file() {
   # Prefer PG* so the password never appears on the process argv.
-  # Neon (and most managed PostGIS) need SSL; default require when unset.
-  export PGSSLMODE="${PGSSLMODE:-require}"
-  if [[ -n "${PGHOST:-}" && -n "${PGUSER:-}" && -n "${PGDATABASE:-}" ]]; then
+  # Neon (and most managed PostGIS) need SSL — only default require on
+  # remote paths (full PG* triple or DATABASE_URL), not local Docker/psql.
+  if has_pg_triple; then
+    export PGSSLMODE="${PGSSLMODE:-require}"
     psql -v ON_ERROR_STOP=1 -f "$FILE"
   elif [[ -n "${DATABASE_URL:-}" ]]; then
+    export PGSSLMODE="${PGSSLMODE:-require}"
     psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$FILE"
   else
     psql "postgres://overwatch:overwatch@127.0.0.1:5432/overwatch" -v ON_ERROR_STOP=1 -f "$FILE"
   fi
 }
 
-if [[ -n "${DATABASE_URL:-}" || -n "${PGHOST:-}" ]]; then
+if [[ -n "${DATABASE_URL:-}" ]] || has_pg_triple; then
   if ! command -v psql >/dev/null 2>&1; then
-    echo "psql required when DATABASE_URL or PGHOST is set" >&2
+    echo "psql required when DATABASE_URL or PGHOST/PGUSER/PGDATABASE is set" >&2
     exit 1
   fi
   run_psql_file
@@ -35,6 +41,6 @@ elif docker inspect -f '{{.State.Running}}' overwatch-postgres 2>/dev/null | gre
 elif command -v psql >/dev/null 2>&1; then
   run_psql_file
 else
-  echo "Need DATABASE_URL/PGHOST, a running overwatch-postgres container, or psql on PATH" >&2
+  echo "Need DATABASE_URL or PGHOST+PGUSER+PGDATABASE, a running overwatch-postgres container, or psql on PATH" >&2
   exit 1
 fi

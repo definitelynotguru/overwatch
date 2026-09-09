@@ -151,15 +151,19 @@ def run_psql(sql):
     """Run SQL via psql. Prefer PG* env so passwords stay off argv (Neon-safe)."""
     from shutil import which
 
-    # Managed PostGIS (Neon) needs SSL; leave local defaults alone when PGHOST unset.
-    if os.environ.get("PGHOST") and not os.environ.get("PGSSLMODE"):
+    # Managed PostGIS (Neon) needs SSL. Only default require for remote paths
+    # (full PGHOST/PGUSER/PGDATABASE triple or DATABASE_URL) — not bare PGHOST
+    # and not the local Docker/default URL fallback.
+    env = os.environ.copy()
+    has_pg_triple = bool(env.get("PGHOST") and env.get("PGUSER") and env.get("PGDATABASE"))
+    if not env.get("PGSSLMODE") and (has_pg_triple or env.get("DATABASE_URL")):
         os.environ["PGSSLMODE"] = "require"
+        env["PGSSLMODE"] = "require"
 
     if which("psql"):
-        env = os.environ.copy()
         # Quiet: remote densify was drowning in "INSERT 0 1" lines (~1/row RTT).
         args = ["psql", "-q", "-v", "ON_ERROR_STOP=1"]
-        if env.get("PGHOST") and env.get("PGUSER") and env.get("PGDATABASE"):
+        if has_pg_triple:
             # libpq picks up PGHOST/PGUSER/PGPASSWORD/PGDATABASE/PGSSLMODE
             pass
         else:
