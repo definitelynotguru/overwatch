@@ -123,9 +123,70 @@ def load_features(path):
     return features
 
 
+BATCH = 500
+
+
+def row_sql(osm_type, osm_id, name, cid, operator, gjson, tags):
+    return (
+        "INSERT INTO assets (osm_type, osm_id, name, canonical_type, operator, geom, tags) VALUES ("
+        + esc(osm_type)
+        + ", "
+        + str(osm_id)
+        + ", "
+        + esc(name)
+        + ", "
+        + esc(cid)
+        + ", "
+        + esc(operator)
+        + ", ST_SetSRID(ST_GeomFromGeoJSON("
+        + esc(gjson)
+        + "), 4326), "
+        + esc(tags)
+        + "::jsonb) ON CONFLICT (osm_type, osm_id) DO UPDATE SET "
+        + "name=EXCLUDED.name, canonical_type=EXCLUDED.canonical_type, operator=EXCLUDED.operator, geom=EXCLUDED.geom, tags=EXCLUDED.tags;"
+    )
+
+
+def run_psql(sql):
+    """Run SQL via psql. Prefer PG* env so passwords stay off argv (Neon-safe)."""
+    from shutil import which
+
+    # Managed PostGIS (Neon) needs SSL; leave local defaults alone when PGHOST unset.
+    if os.environ.get("PGHOST") and not os.environ.get("PGSSLMODE"):
+        os.environ["PGSSLMODE"] = "require"
+
+    if which("psql"):
+        env = os.environ.copy()
+        # Quiet: remote densify was drowning in "INSERT 0 1" lines (~1/row RTT).
+        args = ["psql", "-q", "-v", "ON_ERROR_STOP=1"]
+        if env.get("PGHOST") and env.get("PGUSER") and env.get("PGDATABASE"):
+            # libpq picks up PGHOST/PGUSER/PGPASSWORD/PGDATABASE/PGSSLMODE
+            pass
+        else:
+            url = env.get("DATABASE_URL", "postgres://overwatch:overwatch@127.0.0.1:5432/overwatch")
+            args.append(url)
+        return subprocess.run(args, input=sql, text=True, env=env)
+    return subprocess.run(
+        [
+            "docker",
+            "exec",
+            "-i",
+            "overwatch-postgres",
+            "psql",
+            "-U",
+            "overwatch",
+            "-d",
+            "overwatch",
+            "-v",
+            "ON_ERROR_STOP=1",
+        ],
+        input=sql,
+        text=True,
+    )
+
+
 def main():
     path = sys.argv[1]
-    url = os.environ.get("DATABASE_URL", "postgres://overwatch:overwatch@127.0.0.1:5432/overwatch")
     rows = []
     for f in load_features(path):
         geom = f.get("geometry") or {}
@@ -157,39 +218,28 @@ def main():
             separators=(",", ":"),
         )
         rows.append((osm_type, osm_id, name, cid, operator, gjson, tags))
-    parts = ["BEGIN;"]
-    for osm_type, osm_id, name, cid, operator, gjson, tags in rows:
-        parts.append(
-            "INSERT INTO assets (osm_type, osm_id, name, canonical_type, operator, geom, tags) VALUES ("
-            + esc(osm_type)
-            + ", "
-            + str(osm_id)
-            + ", "
-            + esc(name)
-            + ", "
-            + esc(cid)
-            + ", "
-            + esc(operator)
-            + ", ST_SetSRID(ST_GeomFromGeoJSON("
-            + esc(gjson)
-            + "), 4326), "
-            + esc(tags)
-            + "::jsonb) ON CONFLICT (osm_type, osm_id) DO UPDATE SET "
-            + "name=EXCLUDED.name, canonical_type=EXCLUDED.canonical_type, operator=EXCLUDED.operator, geom=EXCLUDED.geom, tags=EXCLUDED.tags;"
-        )
-    parts.append("COMMIT;")
-    sql = "\n".join(parts)
-    from shutil import which
-    if which("psql"):
-        proc = subprocess.run(["psql", url, "-v", "ON_ERROR_STOP=1"], input=sql, text=True)
-    else:
-        proc = subprocess.run(
-            ["docker", "exec", "-i", "overwatch-postgres", "psql", "-U", "overwatch", "-d", "overwatch", "-v", "ON_ERROR_STOP=1"],
-            input=sql,
-            text=True,
-        )
-    print("upserted", len(rows))
-    raise SystemExit(proc.returncode)
+
+    # Batched commits: one giant BEGIN/COMMIT over Neon was ~50 min for ~15k
+    # upserts and held a single long transaction. Smaller batches commit
+    # progress and cut peak memory for the SQL string.
+    total = len(rows)
+    done = 0
+    for i in range(0, total, BATCH):
+        chunk = rows[i : i + BATCH]
+        parts = ["BEGIN;"]
+        for row in chunk:
+            parts.append(row_sql(*row))
+        parts.append("COMMIT;")
+        proc = run_psql("\n".join(parts))
+        if proc.returncode != 0:
+            print("upsert failed after", done, "of", total, file=sys.stderr)
+            raise SystemExit(proc.returncode)
+        done += len(chunk)
+        print("upserted", done, "/", total)
+
+    if total == 0:
+        print("upserted 0")
+    raise SystemExit(0)
 
 
 if __name__ == "__main__":
