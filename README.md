@@ -240,12 +240,28 @@ Needs [osmium-tool](https://osmcode.org/osmium-tool/). Filter tags cover every c
 Against Neon (or any remote PostGIS):
 
 ```bash
-export DATABASE_URL='postgres://…'   # your Neon URL — do not commit it
-npm run db:migrate
-npm run db:densify
+# Prefer dotenv-style env (never commit). sslmode=require on the URL, or set PGSSLMODE=require.
+set -a; source /path/to/neon.env; set +a
+# apply-sql.sh / load-geojson.py prefer DATABASE_URL or libpq PG* over a local
+# Docker container, and keep passwords off the psql argv when PGHOST/PGUSER/PGDATABASE are set.
+npm run db:migrate     # idempotent migrate_geom
+npm run db:densify     # fetch Greater London PBF (cached under data/) then import
 ```
 
-Prove a join after import:
+Verified on Neon (prod) with Greater London densify — order of magnitude only (exact
+counts drift as OSM updates):
+
+- ~10³–10⁴ assets total after one London densify (low–mid thousands)
+- Dominant types: `substation` (thousands), `industrial` / `bridge` (thousands),
+  `pipeline` / `telecom` (hundreds), `airport` / `power_plant` / `helipad` (tens)
+- Re-running densify is idempotent (`ON CONFLICT (osm_type, osm_id) DO UPDATE`);
+  counts stay flat when the extract has not changed
+- Loader upserts in batches of 500 with quiet psql (`-q`) so remote RTT does not
+  print one `INSERT 0 1` line per row
+
+Prove a join after import (API or SQL). Headline query should return non-trivial
+subject + related — typically dozens of airports near London and hundreds of
+pipelines within 20 km:
 
 ```bash
 curl -sG 'http://localhost:3000/api/search' --data-urlencode 'q=pipelines within 20 km of airports near london' | jq '.stats, (.related|length), (.results|length)'
