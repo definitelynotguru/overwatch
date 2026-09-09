@@ -1,8 +1,10 @@
-import type { ParsedQuery, SearchResult } from '../domain/types'
+import type { ParsedQuery, RelatedAssets, SearchResult } from '../domain/types'
 import { getAssetType } from '../domain/catalog'
 
 type Props = {
   data: SearchResult | null
+  /** Filtered related hops (for mixRelated label); falls back to data.related. */
+  relatedForLabel?: RelatedAssets[]
   typeFilter: string | null
   operatorFilter: string | null
   onType: (t: string | null) => void
@@ -20,7 +22,7 @@ function kv(query: ParsedQuery): [string, string][] {
   return rows
 }
 
-export function FacetPanel({ data, typeFilter, operatorFilter, onType, onOperator }: Props) {
+export function FacetPanel({ data, relatedForLabel, typeFilter, operatorFilter, onType, onOperator }: Props) {
   if (!data) {
     return (
       <aside className="facets">
@@ -32,7 +34,7 @@ export function FacetPanel({ data, typeFilter, operatorFilter, onType, onOperato
 
   const types = Object.entries(data.stats.types).sort((a, b) => b[1] - a[1])
   const operators = Object.entries(data.stats.operators).sort((a, b) => b[1] - a[1])
-  const mixRelated = data.related.some((r) => r.assets.length > 0)
+  const mixRelated = (relatedForLabel ?? data.related).some((r) => r.assets.length > 0)
 
   return (
     <aside className="facets">

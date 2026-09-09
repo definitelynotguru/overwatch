@@ -121,6 +121,7 @@ function Home() {
       <div className="workspace">
         <FacetPanel
           data={result}
+          relatedForLabel={related}
           typeFilter={typeFilter}
           operatorFilter={operatorFilter}
           onType={setTypeFilter}

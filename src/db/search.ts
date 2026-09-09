@@ -326,7 +326,8 @@ function bumpFacetCounts(
 ) {
   for (const a of assets) {
     types[a.type] = (types[a.type] ?? 0) + 1
-    const op = a.operator?.trim() ? a.operator : 'Unknown'
+    const trimmed = a.operator?.trim()
+    const op = trimmed ? trimmed : 'Unknown'
     operators[op] = (operators[op] ?? 0) + 1
   }
 }
