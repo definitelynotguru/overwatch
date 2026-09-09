@@ -207,3 +207,29 @@ export function validateQuery(parsed: ParsedQuery): { valid: boolean; error?: st
   }
   return { valid: true }
 }
+
+function structuredToken(value: string): string {
+  return value.trim().replace(/\s+/g, '_')
+}
+
+/** Rewrite a query to stable structured tokens for shareable URLs. */
+export function toCanonicalQuery(input: string): string {
+  const trimmed = input.trim()
+  if (!trimmed) return ''
+
+  const parsed = parseQuery(trimmed)
+  if (!validateQuery(parsed).valid) return trimmed
+
+  const parts: string[] = []
+  if (parsed.type) parts.push(`type:${structuredToken(parsed.type)}`)
+  if (parsed.operator) parts.push(`operator:${structuredToken(parsed.operator)}`)
+  if (parsed.region) parts.push(`region:${structuredToken(parsed.region)}`)
+  if (parsed.country) parts.push(`country:${structuredToken(parsed.country)}`)
+  if (parsed.near) parts.push(`near:${structuredToken(parsed.near)}`)
+  if (parsed.near && parsed.radius !== 50) parts.push(`radius:${parsed.radius}`)
+  for (const hop of parsed.hops) {
+    const km = Math.round(hop.withinM / 1000)
+    parts.push(`within:${hop.type}:${km}`)
+  }
+  return parts.join(' ')
+}

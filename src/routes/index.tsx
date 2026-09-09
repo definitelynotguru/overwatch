@@ -6,6 +6,7 @@ import { FacetPanel } from '../components/FacetPanel'
 import { ResultList } from '../components/ResultList'
 import { isSearchError, type Asset, type RelatedAssets, type SearchError, type SearchResult } from '../domain/types'
 import { HOP_COLORS, SUBJECT_COLOR, formatWithinM, type LegendItem } from '../domain/hops'
+import { toCanonicalQuery } from '../domain/parser'
 
 const MapPane = lazy(() => import('../components/MapPane').then((m) => ({ default: m.MapPane })))
 
@@ -80,7 +81,8 @@ function Home() {
   }
 
   function runSearch(next: string) {
-    void navigate({ search: { q: next }, replace: true })
+    const q = next.trim() ? toCanonicalQuery(next) : ''
+    void navigate({ search: { q }, replace: true })
   }
 
   return (

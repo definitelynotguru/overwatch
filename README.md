@@ -36,7 +36,7 @@ Counts came from `curl` against a running local app. `near` uses a 50 km radius 
 
 A natural-language parser and a structured `key:value` parser that both land on the same query object. SQL then runs meter ST_DWithin / ST_Intersects against mixed `geometry(Geometry, 4326)` with GIST indexes. The UI is a dark three-column layout: facets, result cards, map.
 
-The URL is the query. `/?q=pipelines%20within%2020%20km%20of%20airports%20near%20london` is a shareable search. Enter submits. Escape clears.
+The URL is the query. Enter rewrites NL into stable structured tokens (`type:pipeline near:london within:airport:20`), so Share copies a round-trippable link. Escape clears.
 
 ## Gallery
 
