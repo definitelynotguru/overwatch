@@ -115,8 +115,15 @@ describe('parseQuery — quoted structured values', () => {
     expect(q.region).toBe('new york')
   })
 
-  it('keeps unquoted values as a single token', () => {
-    const q = parseQuery('operator:Long region:new york')
+  it('allows unquoted multi-word operator/region/near until the next key', () => {
+    const q = parseQuery('operator:Long Island Rail Road region:new york')
+    expect(q.operator).toBe('long island rail road')
+    expect(q.region).toBe('new york')
+    expect(parseQuery('near:new york radius:50').near).toBe('new york')
+  })
+
+  it('stops unquoted operator at the next structured key', () => {
+    const q = parseQuery('operator:Long region:new')
     expect(q.operator).toBe('long')
     expect(q.region).toBe('new')
   })
@@ -351,6 +358,56 @@ describe('parseQuery — structured join hops', () => {
     expect(structured.hops).toEqual(nl.hops)
     expect(structured.type).toBe(nl.type)
     expect(structured.near).toBe(nl.near)
+  })
+})
+
+describe('parseQuery — operator × join', () => {
+  it('parses operator:National Grid within:substation:10 near london', () => {
+    const q = parseQuery('operator:National Grid within:substation:10 near london')
+    expect(q.operator).toBe('national grid')
+    expect(q.type).toBeNull()
+    expect(q.hops).toEqual([{ type: 'substation', withinM: 10000 }])
+    expect(q.near).toBe('london')
+    expect(q.radius).toBe(50)
+    expect(validateQuery(q).valid).toBe(true)
+  })
+
+  it('parses quoted operator with structured hop and near', () => {
+    const q = parseQuery('operator:"National Grid" within:substation:10 near:london')
+    expect(q.operator).toBe('national grid')
+    expect(q.hops).toEqual([{ type: 'substation', withinM: 10000 }])
+    expect(q.near).toBe('london')
+  })
+
+  it('parses NL National Grid within 10 km of substations near london', () => {
+    const q = parseQuery('National Grid within 10 km of substations near london')
+    expect(q.operator).toBe('national grid')
+    expect(q.hops).toEqual([{ type: 'substation', withinM: 10000 }])
+    expect(q.near).toBe('london')
+    expect(validateQuery(q).valid).toBe(true)
+  })
+
+  it('parses operator-only structured hop without a type', () => {
+    const q = parseQuery('operator:airtel within:substation:10 near london')
+    expect(q.operator).toBe('airtel')
+    expect(q.type).toBeNull()
+    expect(q.hops).toEqual([{ type: 'substation', withinM: 10000 }])
+    expect(q.near).toBe('london')
+  })
+
+  it('parses NL airtel within 10 km of substations in karnataka', () => {
+    const q = parseQuery('airtel within 10 km of substations in karnataka')
+    expect(q.operator).toBe('airtel')
+    expect(q.hops).toEqual([{ type: 'substation', withinM: 10000 }])
+    expect(q.region).toBe('karnataka')
+  })
+
+  it('keeps structured operator with type and NL hop', () => {
+    const q = parseQuery('operator:airtel pipelines within 20 km of airports in karnataka')
+    expect(q.operator).toBe('airtel')
+    expect(q.type).toBe('pipeline')
+    expect(q.hops).toEqual([{ type: 'airport', withinM: 20000 }])
+    expect(q.region).toBe('karnataka')
   })
 })
 

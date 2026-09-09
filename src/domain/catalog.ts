@@ -1467,6 +1467,7 @@ export const OPERATOR_ALIASES: Readonly<Record<string, readonly string[]>> = {
   "adani": ["adani power", "adani green"],
   "tata": ["tata power", "tata steel"],
   "reliance": ["reliance industries", "ril"],
+  "national grid": ["nationalgrid", "national grid plc", "nged"],
 }
 
 function escapeRe(s: string): string {

@@ -98,9 +98,10 @@ substations in karnataka
 airports near london within 20 km
 airtel in karnataka
 pipelines within 20 km of airports near london
+National Grid within 10 km of substations near london
 ```
 
-Structured tokens. Quote a value when it has spaces.
+Structured tokens. Unquoted `operator` / `near` / `region` / `country` values may include spaces until the next `key:`; quote when you prefer.
 
 ```
 type:airport near:london radius:50
@@ -110,6 +111,7 @@ type:datacenter region:california
 operator:airtel region:karnataka
 operator:"Long Island Rail Road" region:"new york"
 type:pipeline near:london within:airport:20
+operator:National Grid within:substation:10 near london
 ```
 
 | Token | Meaning |
@@ -121,7 +123,7 @@ type:pipeline near:london within:airport:20
 | `radius` | Kilometers, 1-500. Default 50. Used only with `near` |
 | `within` | Join hop as `within:<type>:<km>` (e.g. `within:airport:20`). Same `JoinHop` as NL; km clamped 1-500 |
 
-`within N km of <type>` (NL) and `within:<type>:<km>` (structured) are spatial join hops (up to 3 combined; structured tokens first). The place filter applies only to the innermost type. Unknown types are not hops. `within 20 km of london` remains place-radius, not a hop.
+`within N km of <type>` (NL) and `within:<type>:<km>` (structured) are spatial join hops (up to 3 combined; structured tokens first). The place filter applies only to the innermost type. Unknown types are not hops. `within 20 km of london` remains place-radius, not a hop. Operator filters combine with joins: subject rows match the operator; hop assets stay spatial (e.g. `operator:National Grid within:substation:10 near london`).
 
 You need a type or an operator, and you need a place. Missing type/operator or missing place returns `invalid_query` with a specific message; an unrecognized `type:` token is called out as unknown. A place missing from the places table returns `unknown_place`.
 

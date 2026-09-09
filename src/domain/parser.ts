@@ -3,7 +3,8 @@ import type { JoinHop, ParsedQuery } from './types'
 
 const TYPE_PHRASES = typePhrases()
 
-const KEY_VALUE = /(?:^|\s)(type|operator|region|country|near|radius|within):(?:"([^"]*)"|([^\s]+))/gi
+const KEY_VALUE =
+  /(?:^|\s)(?:(type|radius|within):(?:"([^"]*)"|([^\s]+))|(operator|region|country|near):(?:"([^"]*)"|(\S+(?:\s+(?!(?:type|operator|region|country|near|radius|within):|(?:within|near|in)\b)\S+)*)))/gi
 const NEAR = /\bnear\s+(.+?)(?:\s+(?:in|within|radius)\b|$)/i
 const IN = /\bin\s+(.+?)(?:\s+(?:near|within|radius)\b|$)/i
 const RADIUS = /(?:within|radius)\s*[:=]?\s*(\d+)(?!\d)(?:\s*(?:km|kilometers?|kilometres?))?(?!\s+(?:km|kilometers?|kilometres?)\b)/i
@@ -102,9 +103,11 @@ export function parseQuery(input: string): ParsedQuery {
   let rest = raw
   let structuredRadius = false
   for (const match of raw.matchAll(KEY_VALUE)) {
-    const key = match[1]!.toLowerCase()
-    const rawVal = match[2] ?? match[3] ?? ''
-    const val = rawVal.replace(/_/g, ' ')
+    const key = (match[1] ?? match[4]!)!.toLowerCase()
+    const rawVal = match[2] ?? match[3] ?? match[5] ?? match[6] ?? ''
+    const collapsed = rawVal.replace(/_/g, ' ').replace(/\s+/g, ' ').trim()
+    // Lone "_" (or similar) must stay literal so LIKE escaping still applies.
+    const val = collapsed || rawVal.trim()
     if (key === 'type') result.type = resolveType(val)
     else if (key === 'operator') result.operator = val.toLowerCase()
     else if (key === 'region') result.region = val
@@ -130,6 +133,20 @@ export function parseQuery(input: string): ParsedQuery {
     rest = rest.replace(match[0]!, ' ')
   }
   rest = rest.replace(/\s+/g, ' ').trim()
+
+  // Unquoted operator values may swallow a trailing type phrase ("operator:airtel pipelines …").
+  if (result.operator) {
+    for (const { phrase, id } of TYPE_PHRASES) {
+      const re = new RegExp(`^(.*?)\\s+${escapeRe(phrase)}s?$`, 'i')
+      const m = result.operator.match(re)
+      const head = m?.[1]?.trim()
+      if (head) {
+        if (!result.type) result.type = id
+        result.operator = head
+        break
+      }
+    }
+  }
 
   const extracted = extractHops(rest)
   for (const hop of extracted.hops) {
