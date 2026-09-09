@@ -427,6 +427,7 @@ export async function searchAssets(q: string): Promise<SearchResult | SearchErro
   const likePattern = operator
     ? '%' + operator.replace(/[\\%_]/g, '\\$&') + '%'
     : null
+  // Operator matches subject rows only; hop EXISTS clauses stay spatial.
   const operatorFilter = likePattern
     ? sql`AND a.operator ILIKE ${likePattern} ESCAPE '\\'`
     : sql``

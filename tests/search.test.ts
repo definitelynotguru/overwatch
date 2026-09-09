@@ -869,3 +869,103 @@ describe('searchAssets — spatial join hops', () => {
     }
   })
 })
+
+describe('searchAssets — operator × join', () => {
+  it('matches National Grid subjects with spatial substation hops', async () => {
+    try {
+      await sql`
+        INSERT INTO places (name, aliases, kind, geom, bbox) VALUES (
+          'Opjoinland',
+          ARRAY['opjoinland test']::text[],
+          'city',
+          ST_SetSRID(ST_MakePoint(30.0, 30.0), 4326)::geography,
+          ST_MakeEnvelope(29.9, 29.9, 30.1, 30.1, 4326)
+        )
+        ON CONFLICT ((lower(name)), kind) DO UPDATE SET
+          aliases = EXCLUDED.aliases,
+          kind = EXCLUDED.kind,
+          geom = EXCLUDED.geom,
+          bbox = EXCLUDED.bbox
+      `
+      await sql`
+        INSERT INTO assets (osm_type, osm_id, name, canonical_type, operator, geom, tags) VALUES
+          (
+            'way',
+            9290010301,
+            'OpJoin National Grid Line',
+            'power_line',
+            'National Grid',
+            ST_SetSRID(ST_GeomFromText('LINESTRING(30.00 30.0, 30.01 30.0)'), 4326),
+            '{}'::jsonb
+          ),
+          (
+            'way',
+            9290010302,
+            'OpJoin Other Operator Line',
+            'power_line',
+            'Someone Else',
+            ST_SetSRID(ST_GeomFromText('LINESTRING(30.00 30.002, 30.01 30.002)'), 4326),
+            '{}'::jsonb
+          ),
+          (
+            'node',
+            9290010303,
+            'OpJoin Nearby Substation',
+            'substation',
+            'UK Power Networks',
+            ST_SetSRID(ST_MakePoint(30.005, 30.0), 4326),
+            '{}'::jsonb
+          )
+        ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+          name = EXCLUDED.name,
+          canonical_type = EXCLUDED.canonical_type,
+          operator = EXCLUDED.operator,
+          geom = EXCLUDED.geom,
+          tags = EXCLUDED.tags
+      `
+      const structured = await searchAssets(
+        'operator:National Grid within:substation:10 near opjoinland',
+      )
+      expect(isSearchError(structured)).toBe(false)
+      if (isSearchError(structured)) return
+      expect(structured.query.operator).toBe('national grid')
+      expect(structured.query.hops).toEqual([{ type: 'substation', withinM: 10000 }])
+      expect(structured.results.some((a) => a.osmId === 9290010301)).toBe(true)
+      expect(structured.results.every((a) => /national grid/i.test(a.operator ?? ''))).toBe(true)
+      expect(structured.results.some((a) => a.osmId === 9290010302)).toBe(false)
+      expect(structured.related).toHaveLength(1)
+      expect(structured.related[0]!.type).toBe('substation')
+      // Hop assets stay spatial — related need not share the subject operator.
+      expect(structured.related[0]!.assets.some((a) => a.osmId === 9290010303)).toBe(true)
+      expect(
+        structured.related[0]!.assets.some((a) => /national grid/i.test(a.operator ?? '')),
+      ).toBe(false)
+
+      const nl = await searchAssets('National Grid within 10 km of substations near opjoinland')
+      expect(isSearchError(nl)).toBe(false)
+      if (isSearchError(nl)) return
+      expect(nl.query.operator).toBe('national grid')
+      expect(nl.query.hops).toEqual([{ type: 'substation', withinM: 10000 }])
+      expect(nl.results.some((a) => a.osmId === 9290010301)).toBe(true)
+      expect(nl.results.some((a) => a.osmId === 9290010302)).toBe(false)
+      expect(nl.related[0]!.assets.some((a) => a.osmId === 9290010303)).toBe(true)
+    } finally {
+      await sql`DELETE FROM assets WHERE osm_id IN (9290010301, 9290010302, 9290010303)`
+      await sql`DELETE FROM places WHERE lower(name) = 'opjoinland'`
+    }
+  })
+
+  it('keeps airtel subjects with substation hops in karnataka', async () => {
+    const out = await searchAssets('operator:airtel within:substation:50 region:karnataka')
+    expect(isSearchError(out)).toBe(false)
+    if (isSearchError(out)) return
+    expect(out.query.operator).toBe('airtel')
+    expect(out.query.hops).toEqual([{ type: 'substation', withinM: 50000 }])
+    expect(out.stats.total).toBeGreaterThan(0)
+    expect(out.results.every((a) => /airtel/i.test(a.operator ?? ''))).toBe(true)
+    expect(out.related[0]!.type).toBe('substation')
+    // Related substations are KPTCL in seed — not Airtel.
+    expect(out.related[0]!.assets.length).toBeGreaterThanOrEqual(1)
+    expect(out.related[0]!.assets.every((a) => a.type === 'substation')).toBe(true)
+  })
+})
