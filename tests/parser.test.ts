@@ -432,4 +432,18 @@ describe('toCanonicalQuery', () => {
       'type:pipeline operator:airtel region:karnataka within:airport:20',
     )
   })
+
+  it('canonicalizes multi-word quoted operators with underscores', () => {
+    const input = 'operator:"Long Island Rail Road" type:airport near:london'
+    const canonical = toCanonicalQuery(input)
+    expect(canonical).toBe('type:airport operator:long_island_rail_road near:london')
+    const roundTrip = parseQuery(canonical)
+    expect(roundTrip.operator).toBe('long island rail road')
+    expect(roundTrip.type).toBe('airport')
+    expect(roundTrip.near).toBe('london')
+  })
+
+  it('includes country in the canonical form', () => {
+    expect(toCanonicalQuery('type:airport country:france')).toBe('type:airport country:france')
+  })
 })
