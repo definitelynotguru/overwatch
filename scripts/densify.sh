@@ -48,7 +48,7 @@ if [[ "$FORCE" -eq 1 ]]; then
   FETCH_ARGS+=(--force)
 fi
 
-"$ROOT/scripts/fetch-region.sh" "${FETCH_ARGS[@]}"
+"$ROOT/scripts/fetch-region.sh" ${FETCH_ARGS[@]+"${FETCH_ARGS[@]}"}
 if [[ -n "$IMPORT_TOKEN" ]]; then
   "$ROOT/scripts/import-pbf.sh" "$IMPORT_TOKEN"
 else
